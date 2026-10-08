@@ -11,6 +11,8 @@ import android.os.*;
 import android.text.InputType;
 import android.view.*;
 import android.widget.*;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
@@ -24,20 +26,29 @@ public class MainActivity extends Activity {
     private static final int MUTED = Color.rgb(185, 177, 199);
     private static final int PINK = Color.rgb(232, 63, 173);
     private static final int GREEN = Color.rgb(81, 205, 113);
+    private static final int RED = Color.rgb(239, 89, 89);
+    private static final int YELLOW = Color.rgb(242, 193, 78);
+
+    private static final String PREFS = "monitor_state";
+    private static final String SEARCHES = "saved_searches";
+    private static final String HISTORY = "search_history";
 
     AutoCompleteTextView origin, destination;
     EditText date, time, interval;
-    TextView status;
+    TextView status, metrics, statusDot;
     RenfeClient.StationList stationList;
+
+    String pendingOriginCode, pendingDestinationCode;
+    String pendingDate, pendingTime;
+    Integer pendingInterval;
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
         getWindow().setStatusBarColor(BG_TOP);
         getWindow().setNavigationBarColor(BG_TOP);
-        if (Build.VERSION.SDK_INT >= 23) {
-            getWindow().getDecorView().setSystemUiVisibility(0);
-        }
-        buildUi();
+        if (Build.VERSION.SDK_INT >= 23) getWindow().getDecorView().setSystemUiVisibility(0);
+
+        buildMainUi();
 
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -48,21 +59,13 @@ public class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
-        if (status == null) return;
-        android.content.SharedPreferences p =
-                getSharedPreferences("monitor_state", MODE_PRIVATE);
-        if (p.getBoolean("found", false)) {
-            String detail = p.getString("detail", "Plaza confirmada");
-            status.setText("✓ ¡PLAZA ENCONTRADA!  " + detail);
-        } else if (p.getBoolean("active", false)) {
-            status.setText("Monitor activo · buscando en segundo plano…");
-        }
+        refreshMonitorState();
     }
 
-    void buildUi() {
+    void buildMainUi() {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        scroll.setBackground(gradient(BG_TOP, BG_BOTTOM, 270));
+        scroll.setBackground(gradient(BG_TOP, BG_BOTTOM));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -73,16 +76,18 @@ public class MainActivity extends Activity {
 
         ImageView icon = new ImageView(this);
         icon.setImageResource(es.renfemonitor.R.drawable.ic_launcher_app);
-        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(58), dp(58));
-        brand.addView(icon, iconLp);
+        brand.addView(icon, new LinearLayout.LayoutParams(dp(58), dp(58)));
 
         LinearLayout brandText = new LinearLayout(this);
         brandText.setOrientation(LinearLayout.VERTICAL);
         brandText.setPadding(dp(14), 0, 0, 0);
         brandText.addView(text("RENFE MONITOR", 12, PINK, Typeface.BOLD));
-        TextView title = text("Busca tu plaza", 29, WHITE, Typeface.BOLD);
-        brandText.addView(title);
+        brandText.addView(text("Busca tu plaza", 29, WHITE, Typeface.BOLD));
         brand.addView(brandText, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        Button saved = smallActionButton("☰  MIS BÚSQUEDAS");
+        saved.setOnClickListener(v -> showSavedScreen());
+        brand.addView(saved, new LinearLayout.LayoutParams(dp(160), dp(48)));
 
         root.addView(brand);
 
@@ -113,8 +118,7 @@ public class MainActivity extends Activity {
         row.setOrientation(LinearLayout.HORIZONTAL);
 
         LinearLayout dateBox = smallBox("FECHA");
-        date = edit(new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(new Date()),
-                InputType.TYPE_CLASS_DATETIME);
+        date = edit(defaultDate(), InputType.TYPE_CLASS_DATETIME);
         dateBox.addView(date, fieldParams());
         row.addView(dateBox, weightParams());
 
@@ -136,17 +140,49 @@ public class MainActivity extends Activity {
         searchCard.addView(info, infoLp);
         root.addView(searchCard, cardParams());
 
+        LinearLayout alertCard = card();
+        alertCard.addView(sectionTitle("Alertas"));
+
+        LinearLayout soundRow = new LinearLayout(this);
+        soundRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView soundLabel = text("🔔 Sonido al encontrar plaza", 14, WHITE, Typeface.NORMAL);
+        soundRow.addView(soundLabel, new LinearLayout.LayoutParams(0, -2, 1f));
+        Switch sound = new Switch(this);
+        sound.setChecked(alertPrefs().getBoolean("alert_sound", true));
+        sound.setOnCheckedChangeListener((buttonView, isChecked) ->
+                alertPrefs().edit().putBoolean("alert_sound", isChecked).apply());
+        soundRow.addView(sound);
+        alertCard.addView(soundRow);
+
+        LinearLayout vibRow = new LinearLayout(this);
+        vibRow.setGravity(Gravity.CENTER_VERTICAL);
+        TextView vibLabel = text("📳 Vibración al encontrar plaza", 14, WHITE, Typeface.NORMAL);
+        vibRow.addView(vibLabel, new LinearLayout.LayoutParams(0, -2, 1f));
+        Switch vibration = new Switch(this);
+        vibration.setChecked(alertPrefs().getBoolean("alert_vibration", true));
+        vibration.setOnCheckedChangeListener((buttonView, isChecked) ->
+                alertPrefs().edit().putBoolean("alert_vibration", isChecked).apply());
+        vibRow.addView(vibration);
+        alertCard.addView(vibRow);
+        root.addView(alertCard, cardParams());
+
         LinearLayout statusCard = card();
         LinearLayout sl = new LinearLayout(this);
         sl.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView dot = text("●", 17, GREEN, Typeface.BOLD);
-        sl.addView(dot, new LinearLayout.LayoutParams(dp(24), -2));
+        statusDot = text("●", 17, MUTED, Typeface.BOLD);
+        sl.addView(statusDot, new LinearLayout.LayoutParams(dp(24), -2));
         status = text("Preparando monitor…", 14, WHITE, Typeface.BOLD);
         sl.addView(status, new LinearLayout.LayoutParams(0, -2, 1f));
         statusCard.addView(sl);
 
-        TextView bgInfo = text("Al iniciar, puedes cerrar esta pantalla: la búsqueda continuará activa en segundo plano. No habrá alertas hasta que se confirme una plaza.", 12, MUTED, Typeface.NORMAL);
+        metrics = text("Conexión: esperando · 0 consultas", 12, MUTED, Typeface.NORMAL);
+        LinearLayout.LayoutParams metricLp = new LinearLayout.LayoutParams(-1, -2);
+        metricLp.topMargin = dp(8);
+        statusCard.addView(metrics, metricLp);
+
+        TextView bgInfo = text("La búsqueda continúa en segundo plano mientras el monitor esté activo. No se avisa hasta confirmar una plaza.",
+                12, MUTED, Typeface.NORMAL);
         LinearLayout.LayoutParams bgLp = new LinearLayout.LayoutParams(-1, -2);
         bgLp.topMargin = dp(8);
         statusCard.addView(bgInfo, bgLp);
@@ -163,7 +199,7 @@ public class MainActivity extends Activity {
         start.setOnClickListener(v -> startMonitor());
         stop.setOnClickListener(v -> stopMonitor());
 
-        TextView foot = text("Renfe Monitor · v2.1", 11, Color.rgb(135, 126, 149), Typeface.NORMAL);
+        TextView foot = text("Renfe Monitor · v3.0", 11, Color.rgb(135, 126, 149), Typeface.NORMAL);
         foot.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams footLp = new LinearLayout.LayoutParams(-1, -2);
         footLp.topMargin = dp(16);
@@ -171,6 +207,414 @@ public class MainActivity extends Activity {
 
         scroll.addView(root);
         setContentView(scroll);
+
+        if (pendingDate != null && date != null) date.setText(pendingDate);
+        if (pendingTime != null && time != null) time.setText(pendingTime);
+        if (pendingInterval != null && interval != null) interval.setText(pendingInterval + " s");
+    }
+
+    void showSavedScreen() {
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.setBackground(gradient(BG_TOP, BG_BOTTOM));
+
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(20), dp(20), dp(20), dp(30));
+
+        Button back = smallActionButton("←  VOLVER");
+        back.setOnClickListener(v -> showMainScreen());
+        root.addView(back, new LinearLayout.LayoutParams(dp(120), dp(46)));
+
+        TextView title = text("MIS BÚSQUEDAS", 28, WHITE, Typeface.BOLD);
+        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(-1, -2);
+        titleLp.topMargin = dp(14);
+        root.addView(title, titleLp);
+        root.addView(text("Tus búsquedas guardadas y las plazas confirmadas recientemente.", 13, MUTED, Typeface.NORMAL));
+
+        LinearLayout savedCard = card();
+        savedCard.addView(sectionTitle("Guardadas"));
+
+        JSONArray saved = getJsonArray(SEARCHES);
+        if (saved.length() == 0) {
+            savedCard.addView(text("Todavía no tienes búsquedas guardadas. Al iniciar una búsqueda se guardará aquí automáticamente.",
+                    13, MUTED, Typeface.NORMAL));
+        } else {
+            for (int i = 0; i < saved.length(); i++) {
+                JSONObject o = saved.optJSONObject(i);
+                if (o == null) continue;
+
+                LinearLayout item = new LinearLayout(this);
+                item.setOrientation(LinearLayout.VERTICAL);
+                item.setPadding(dp(12), dp(12), dp(12), dp(12));
+                item.setBackground(round(FIELD, BORDER, 14));
+
+                String route = o.optString("originName", "Origen") + " → " + o.optString("destName", "Destino");
+                item.addView(text(route, 15, WHITE, Typeface.BOLD));
+                item.addView(text(o.optString("date", "--") + " · " + o.optString("time", "--") +
+                        " · cada " + o.optInt("interval", 20) + " s", 12, MUTED, Typeface.NORMAL));
+
+                String key = o.optString("key", "");
+                boolean active = isCurrentSearchActive(key);
+                item.addView(text(active ? "● ACTIVA" : "○ GUARDADA", 11,
+                        active ? GREEN : MUTED, Typeface.BOLD));
+
+                LinearLayout actions = new LinearLayout(this);
+                actions.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+                Button load = smallActionButton("CARGAR");
+                Button del = smallActionButton("ELIMINAR");
+                load.setOnClickListener(v -> loadSavedSearch(o));
+                del.setOnClickListener(v -> {
+                    deleteSavedSearch(key);
+                    showSavedScreen();
+                });
+                actions.addView(load, new LinearLayout.LayoutParams(dp(105), dp(44)));
+                LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(dp(110), dp(44));
+                delLp.leftMargin = dp(8);
+                actions.addView(del, delLp);
+                item.addView(actions);
+
+                LinearLayout.LayoutParams itemLp = new LinearLayout.LayoutParams(-1, -2);
+                itemLp.bottomMargin = dp(10);
+                savedCard.addView(item, itemLp);
+            }
+        }
+        root.addView(savedCard, cardParams());
+
+        LinearLayout historyCard = card();
+        historyCard.addView(sectionTitle("Historial de plazas"));
+
+        JSONArray history = getJsonArray(HISTORY);
+        if (history.length() == 0) {
+            historyCard.addView(text("Aquí aparecerán las plazas que el monitor confirme.", 13, MUTED, Typeface.NORMAL));
+        } else {
+            for (int i = 0; i < history.length(); i++) {
+                JSONObject h = history.optJSONObject(i);
+                if (h == null) continue;
+
+                LinearLayout item = new LinearLayout(this);
+                item.setOrientation(LinearLayout.VERTICAL);
+                item.setPadding(dp(12), dp(12), dp(12), dp(12));
+                item.setBackground(round(FIELD, BORDER, 14));
+
+                item.addView(text("✓ " + h.optString("originName", "") + " → " +
+                        h.optString("destName", ""), 14, GREEN, Typeface.BOLD));
+                item.addView(text(h.optString("date", "") + " · " + h.optString("time", "") +
+                        " · " + formatTimestamp(h.optLong("timestamp", 0)), 12, MUTED, Typeface.NORMAL));
+                item.addView(text(h.optString("detail", ""), 13, WHITE, Typeface.NORMAL));
+
+                LinearLayout.LayoutParams itemLp = new LinearLayout.LayoutParams(-1, -2);
+                itemLp.bottomMargin = dp(10);
+                historyCard.addView(item, itemLp);
+            }
+        }
+
+        if (history.length() > 0) {
+            Button clear = button("🗑  LIMPIAR HISTORIAL", FIELD, WHITE);
+            clear.setOnClickListener(v -> {
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove("history").apply();
+                showSavedScreen();
+            });
+            historyCard.addView(clear, new LinearLayout.LayoutParams(-1, dp(48)));
+        }
+
+        root.addView(historyCard, cardParams());
+
+        TextView foot = text("Renfe Monitor · v3.0", 11, Color.rgb(135, 126, 149), Typeface.NORMAL);
+        foot.setGravity(Gravity.CENTER);
+        root.addView(foot);
+
+        scroll.addView(root);
+        setContentView(scroll);
+    }
+
+    void loadSavedSearch(JSONObject o) {
+        pendingOriginCode = o.optString("originCode", "");
+        pendingDestinationCode = o.optString("destCode", "");
+        pendingDate = o.optString("date", defaultDate());
+        pendingTime = o.optString("time", "17:40");
+        pendingInterval = o.optInt("interval", 20);
+        showMainScreen();
+    }
+
+    void showMainScreen() {
+        buildMainUi();
+        loadStations();
+    }
+
+    boolean isCurrentSearchActive(String key) {
+        android.content.SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
+        return p.getBoolean("active", false) && key.equals(p.getString("searchKey", ""));
+    }
+
+    void deleteSavedSearch(String key) {
+        JSONArray src = getJsonArray(SEARCHES);
+        JSONArray out = new JSONArray();
+        for (int i = 0; i < src.length(); i++) {
+            JSONObject o = src.optJSONObject(i);
+            if (o == null) continue;
+            if (!key.equals(o.optString("key", ""))) out.put(o);
+        }
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putString(SEARCHES, out.toString()).apply();
+    }
+
+    void upsertSavedSearch(String on, String oc, String dn, String dc, String ds, String ts, int sec) {
+        JSONArray src = getJsonArray(SEARCHES);
+        JSONArray out = new JSONArray();
+        String key = oc + "|" + dc + "|" + ds + "|" + ts;
+        boolean replaced = false;
+        try {
+            JSONObject item = new JSONObject();
+            item.put("key", key);
+            item.put("originName", on);
+            item.put("originCode", oc);
+            item.put("destName", dn);
+            item.put("destCode", dc);
+            item.put("date", ds);
+            item.put("time", ts);
+            item.put("interval", sec);
+            item.put("updated", System.currentTimeMillis());
+
+            out.put(item);
+            replaced = true;
+
+            for (int i = 0; i < src.length() && out.length() < 20; i++) {
+                JSONObject old = src.optJSONObject(i);
+                if (old == null) continue;
+                if (key.equals(old.optString("key", ""))) continue;
+                out.put(old);
+            }
+        } catch (Exception ignored) {}
+
+        if (replaced) {
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putString(SEARCHES, out.toString()).apply();
+        }
+    }
+
+    void addHistory(JSONObject item) {
+        JSONArray src = getJsonArray(HISTORY);
+        JSONArray out = new JSONArray();
+        out.put(item);
+        for (int i = 0; i < src.length() && out.length() < 50; i++) {
+            JSONObject h = src.optJSONObject(i);
+            if (h != null) out.put(h);
+        }
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putString(HISTORY, out.toString()).apply();
+    }
+
+    JSONArray getJsonArray(String key) {
+        try {
+            return new JSONArray(getSharedPreferences(PREFS, MODE_PRIVATE)
+                    .getString(key, "[]"));
+        } catch (Exception e) {
+            return new JSONArray();
+        }
+    }
+
+    android.content.SharedPreferences alertPrefs() {
+        return getSharedPreferences(PREFS, MODE_PRIVATE);
+    }
+
+    String defaultDate() {
+        return new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(new Date());
+    }
+
+    String formatTimestamp(long t) {
+        if (t <= 0) return "sin fecha";
+        return new SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(new Date(t));
+    }
+
+    void refreshMonitorState() {
+        if (status == null || metrics == null) return;
+        android.content.SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
+
+        boolean active = p.getBoolean("active", false);
+        boolean found = p.getBoolean("found", false);
+        String detail = p.getString("detail", "");
+        String conn = p.getString("connection", "WAITING");
+        long last = p.getLong("lastCheck", 0);
+        int count = p.getInt("queryCount", 0);
+        String error = p.getString("lastError", "");
+
+        if (found) {
+            status.setText("✓ ¡PLAZA ENCONTRADA!  " + detail);
+        } else if (active) {
+            status.setText("Monitor activo · buscando en segundo plano…");
+        } else {
+            status.setText("Monitor detenido.");
+        }
+
+        String connLabel;
+        int connColor;
+        if ("ONLINE".equals(conn)) {
+            connLabel = "RENFE ONLINE";
+            connColor = GREEN;
+        } else if ("ERROR".equals(conn)) {
+            connLabel = "RENFE ERROR";
+            connColor = RED;
+        } else {
+            connLabel = "RENFE ESPERANDO";
+            connColor = YELLOW;
+        }
+
+        if (statusDot != null) statusDot.setTextColor(connColor);
+        String lastText = last > 0 ? " · última " + formatTimestamp(last) : "";
+        metrics.setText(connLabel + " · " + count + " consultas" + lastText +
+                (("ERROR".equals(conn) && !error.isEmpty()) ? " · reintentando" : ""));
+        metrics.setTextColor(MUTED);
+    }
+
+    void loadStations() {
+        new Thread(() -> {
+            try {
+                stationList = RenfeClient.getStations();
+                ArrayList<String> labels = new ArrayList<>();
+                for (RenfeClient.Station s : stationList.items) {
+                    labels.add(s.name + " [" + s.code + "]");
+                }
+
+                runOnUiThread(() -> {
+                    ArrayAdapter<String> adapter = new ArrayAdapter<String>(
+                            this, android.R.layout.simple_list_item_1, labels) {
+                        @Override public View getView(int position, View convertView, android.view.ViewGroup parent) {
+                            TextView v = (TextView) super.getView(position, convertView, parent);
+                            styleStation(v);
+                            return v;
+                        }
+
+                        @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parent) {
+                            TextView v = (TextView) super.getDropDownView(position, convertView, parent);
+                            styleStation(v);
+                            return v;
+                        }
+                    };
+                    origin.setAdapter(adapter);
+                    destination.setAdapter(adapter);
+
+                    if (pendingOriginCode != null && !pendingOriginCode.isEmpty()) {
+                        origin.setText(findLabelByCode(pendingOriginCode), false);
+                        destination.setText(findLabelByCode(pendingDestinationCode), false);
+                        pendingOriginCode = null;
+                        pendingDestinationCode = null;
+                        pendingDate = null;
+                        pendingTime = null;
+                        pendingInterval = null;
+                    } else if (!stationList.items.isEmpty()) {
+                        origin.setText(findDefault("ALCAZAR"), false);
+                        destination.setText(findDefault("ALICANTE"), false);
+                    }
+
+                    status.setText("Listo · " + stationList.items.size() + " estaciones");
+                    refreshMonitorState();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    status.setText("No se pudieron cargar las estaciones");
+                    if (statusDot != null) statusDot.setTextColor(RED);
+                });
+            }
+        }).start();
+    }
+
+    void styleStation(TextView v) {
+        v.setTextColor(WHITE);
+        v.setTypeface(Typeface.create("sans", Typeface.NORMAL));
+        v.setTextSize(16);
+        v.setPadding(dp(16), dp(12), dp(16), dp(12));
+        v.setBackgroundColor(CARD);
+    }
+
+    String findLabelByCode(String code) {
+        for (RenfeClient.Station s : stationList.items) {
+            if (s.code.equals(code)) return s.name + " [" + s.code + "]";
+        }
+        return findDefault("");
+    }
+
+    String findDefault(String q) {
+        String f = q.toLowerCase(Locale.ROOT);
+        for (RenfeClient.Station s : stationList.items) {
+            if (s.name.toLowerCase(Locale.ROOT).contains(f)) {
+                return s.name + " [" + s.code + "]";
+            }
+        }
+        return stationList.items.isEmpty() ? "" :
+                stationList.items.get(0).name + " [" + stationList.items.get(0).code + "]";
+    }
+
+    void startMonitor() {
+        try {
+            String o = origin.getText().toString().trim();
+            String d = destination.getText().toString().trim();
+            String oc = codeFromLabel(o), dc = codeFromLabel(d);
+
+            if (oc == null || dc == null) {
+                status.setText("Selecciona las estaciones de la lista.");
+                return;
+            }
+            if (oc.equals(dc)) {
+                status.setText("Origen y destino no pueden coincidir.");
+                return;
+            }
+
+            String ds = date.getText().toString().trim();
+            String ts = time.getText().toString().trim();
+            validateDate(ds);
+            validateTime(ts);
+            int sec = Math.max(10, Integer.parseInt(interval.getText().toString().replace("s", "").trim()));
+
+            upsertSavedSearch(labelName(o), oc, labelName(d), dc, ds, ts, sec);
+
+            Intent i = new Intent(this, MonitorService.class);
+            i.putExtra("originName", labelName(o));
+            i.putExtra("originCode", oc);
+            i.putExtra("destName", labelName(d));
+            i.putExtra("destCode", dc);
+            i.putExtra("date", ds);
+            i.putExtra("time", ts);
+            i.putExtra("interval", sec);
+
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
+            else startService(i);
+
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putBoolean("active", true)
+                    .putBoolean("found", false)
+                    .putString("detail", "")
+                    .putString("searchKey", oc + "|" + dc + "|" + ds + "|" + ts)
+                    .putString("connection", "WAITING")
+                    .putInt("queryCount", 0)
+                    .putLong("lastCheck", 0)
+                    .putString("lastError", "")
+                    .apply();
+
+            status.setText("Monitor activo · buscando en segundo plano…");
+            refreshMonitorState();
+        } catch (Exception e) {
+            status.setText("Revisa fecha, hora, intervalo y estaciones.");
+        }
+    }
+
+    void stopMonitor() {
+        stopService(new Intent(this, MonitorService.class));
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putBoolean("active", false)
+                .putBoolean("found", false)
+                .putString("detail", "")
+                .putString("connection", "WAITING")
+                .apply();
+        status.setText("Monitor detenido.");
+        refreshMonitorState();
+    }
+
+    Button smallActionButton(String label) {
+        Button b = button(label, FIELD, WHITE);
+        b.setTextSize(11);
+        b.setPadding(dp(8), 0, dp(8), 0);
+        return b;
     }
 
     LinearLayout smallBox(String label) {
@@ -271,126 +715,13 @@ public class MainActivity extends Activity {
         return d;
     }
 
-    GradientDrawable gradient(int a, int b, int angle) {
-        GradientDrawable d = new GradientDrawable(
+    GradientDrawable gradient(int a, int b) {
+        return new GradientDrawable(
                 GradientDrawable.Orientation.TL_BR, new int[]{a, b});
-        d.setCornerRadius(0);
-        return d;
     }
 
     int dp(float x) {
         return Math.round(x * getResources().getDisplayMetrics().density);
-    }
-
-    void loadStations() {
-        new Thread(() -> {
-            try {
-                stationList = RenfeClient.getStations();
-                ArrayList<String> labels = new ArrayList<>();
-                for (RenfeClient.Station s : stationList.items) {
-                    labels.add(s.name + " [" + s.code + "]");
-                }
-                runOnUiThread(() -> {
-                    ArrayAdapter<String> adapter = new ArrayAdapter<String>(
-                            this, android.R.layout.simple_list_item_1, labels) {
-                        @Override public View getView(int position, View convertView, android.view.ViewGroup parent) {
-                            TextView v = (TextView) super.getView(position, convertView, parent);
-                            v.setTextColor(WHITE);
-                            v.setTypeface(Typeface.create("sans", Typeface.NORMAL));
-                            v.setTextSize(16);
-                            v.setPadding(dp(16), dp(12), dp(16), dp(12));
-                            v.setBackgroundColor(CARD);
-                            return v;
-                        }
-
-                        @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parent) {
-                            TextView v = (TextView) super.getDropDownView(position, convertView, parent);
-                            v.setTextColor(WHITE);
-                            v.setTypeface(Typeface.create("sans", Typeface.NORMAL));
-                            v.setTextSize(16);
-                            v.setPadding(dp(16), dp(12), dp(16), dp(12));
-                            v.setBackgroundColor(CARD);
-                            return v;
-                        }
-                    };
-                    origin.setAdapter(adapter);
-                    destination.setAdapter(adapter);
-                    if (!stationList.items.isEmpty()) {
-                        origin.setText(findDefault("ALCAZAR"), false);
-                        destination.setText(findDefault("ALICANTE"), false);
-                    }
-                    status.setText("Listo · " + stationList.items.size() + " estaciones");
-                });
-            } catch (Exception e) {
-                runOnUiThread(() -> status.setText("No se pudieron cargar las estaciones"));
-            }
-        }).start();
-    }
-
-    String findDefault(String q) {
-        String f = q.toLowerCase(Locale.ROOT);
-        for (RenfeClient.Station s : stationList.items) {
-            if (s.name.toLowerCase(Locale.ROOT).contains(f)) {
-                return s.name + " [" + s.code + "]";
-            }
-        }
-        return stationList.items.isEmpty() ? "" :
-                stationList.items.get(0).name + " [" + stationList.items.get(0).code + "]";
-    }
-
-    void startMonitor() {
-        try {
-            String o = origin.getText().toString().trim();
-            String d = destination.getText().toString().trim();
-            String oc = codeFromLabel(o), dc = codeFromLabel(d);
-
-            if (oc == null || dc == null) {
-                status.setText("Selecciona las estaciones de la lista.");
-                return;
-            }
-            if (oc.equals(dc)) {
-                status.setText("Origen y destino no pueden coincidir.");
-                return;
-            }
-
-            String ds = date.getText().toString().trim();
-            String ts = time.getText().toString().trim();
-            validateDate(ds);
-            validateTime(ts);
-            int sec = Math.max(10, Integer.parseInt(interval.getText().toString().replace("s", "").trim()));
-
-            Intent i = new Intent(this, MonitorService.class);
-            i.putExtra("originName", labelName(o));
-            i.putExtra("originCode", oc);
-            i.putExtra("destName", labelName(d));
-            i.putExtra("destCode", dc);
-            i.putExtra("date", ds);
-            i.putExtra("time", ts);
-            i.putExtra("interval", sec);
-
-            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
-            else startService(i);
-
-            getSharedPreferences("monitor_state", MODE_PRIVATE).edit()
-                    .putBoolean("active", true)
-                    .putBoolean("found", false)
-                    .putString("detail", "")
-                    .apply();
-
-            status.setText("Monitor activo · buscando en segundo plano…");
-        } catch (Exception e) {
-            status.setText("Revisa fecha, hora, intervalo y estaciones.");
-        }
-    }
-
-    void stopMonitor() {
-        stopService(new Intent(this, MonitorService.class));
-        getSharedPreferences("monitor_state", MODE_PRIVATE).edit()
-                .putBoolean("active", false)
-                .putBoolean("found", false)
-                .putString("detail", "")
-                .apply();
-        status.setText("Monitor detenido.");
     }
 
     String labelName(String s) {
