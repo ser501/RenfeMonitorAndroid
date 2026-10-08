@@ -31,12 +31,20 @@ public class MonitorService extends Service {
                     update("Buscando " + on + " → " + dn + " | " + date + " | " + target);
                     java.util.ArrayList<RenfeClient.Journey> found = RenfeClient.search(on,oc,dn,dc,date,target);
                     if (!found.isEmpty()) {
-                        RenfeClient.Journey j = found.get(0);
-                        String detail = j.toStringLine();
-                        update("PLAZA ENCONTRADA: " + detail);
-                        notifyFound(on,dn,date,target,detail);
-                        running=false;
-                        break;
+                        // Confirm with a second completely fresh Renfe session.
+                        // A single transient/stale result must never trigger an alert.
+                        update("Candidato encontrado; confirmando disponibilidad real…");
+                        Thread.sleep(1200L);
+                        java.util.ArrayList<RenfeClient.Journey> confirm =
+                                RenfeClient.search(on,oc,dn,dc,date,target);
+                        if (!confirm.isEmpty()) {
+                            RenfeClient.Journey j = confirm.get(0);
+                            String detail = j.toStringLine();
+                            update("PLAZA CONFIRMADA: " + detail);
+                            notifyFound(on,dn,date,target,detail);
+                            running=false;
+                            break;
+                        }
                     }
                 } catch (Exception e) {
                     update("Error: " + safe(e.getMessage()));
