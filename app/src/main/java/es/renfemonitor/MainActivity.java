@@ -46,6 +46,19 @@ public class MainActivity extends Activity {
         loadStations();
     }
 
+    @Override protected void onResume() {
+        super.onResume();
+        if (status == null) return;
+        android.content.SharedPreferences p =
+                getSharedPreferences("monitor_state", MODE_PRIVATE);
+        if (p.getBoolean("found", false)) {
+            String detail = p.getString("detail", "Plaza confirmada");
+            status.setText("✓ ¡PLAZA ENCONTRADA!  " + detail);
+        } else if (p.getBoolean("active", false)) {
+            status.setText("Monitor activo · buscando en segundo plano…");
+        }
+    }
+
     void buildUi() {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -338,6 +351,12 @@ public class MainActivity extends Activity {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
             else startService(i);
 
+            getSharedPreferences("monitor_state", MODE_PRIVATE).edit()
+                    .putBoolean("active", true)
+                    .putBoolean("found", false)
+                    .putString("detail", "")
+                    .apply();
+
             status.setText("Monitor activo · buscando en segundo plano…");
         } catch (Exception e) {
             status.setText("Revisa fecha, hora, intervalo y estaciones.");
@@ -346,6 +365,11 @@ public class MainActivity extends Activity {
 
     void stopMonitor() {
         stopService(new Intent(this, MonitorService.class));
+        getSharedPreferences("monitor_state", MODE_PRIVATE).edit()
+                .putBoolean("active", false)
+                .putBoolean("found", false)
+                .putString("detail", "")
+                .apply();
         status.setText("Monitor detenido.");
     }
 
