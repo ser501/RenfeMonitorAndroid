@@ -10,7 +10,7 @@ public class MonitorService extends Service {
     static final int SEARCH_ID = 77;
     static final int FOUND_ID = 78;
     static final String SEARCH_CHANNEL = "renfe_search_v2";
-    static final String FOUND_CHANNEL = "renfe_found_v3";
+    static final String FOUND_CHANNEL = "renfe_found_v4";
 
     volatile boolean running = false;
     volatile Thread worker;
@@ -120,6 +120,15 @@ public class MonitorService extends Service {
                 .build();
 
         ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(FOUND_ID, n);
+
+        // Refuerzo sonoro: además del sonido del canal de notificación,
+        // emite un aviso corto en el flujo de notificaciones del sistema.
+        try {
+            android.media.ToneGenerator tone =
+                    new android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100);
+            tone.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 900);
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(tone::release, 1100L);
+        } catch (Exception ignored) {}
     }
 
     void createChannels() {
