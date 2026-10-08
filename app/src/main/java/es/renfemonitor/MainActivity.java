@@ -17,6 +17,7 @@ public class MainActivity extends android.app.Activity {
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
+        RenfeClient.init(getApplicationContext());
         buildUi();
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
