@@ -4,7 +4,6 @@ import android.app.*;
 import android.content.*;
 import android.net.Uri;
 import android.os.*;
-import androidx.core.app.NotificationCompat;
 import java.util.*;
 
 public class MonitorService extends Service {
@@ -60,11 +59,11 @@ public class MonitorService extends Service {
         Intent in=new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.renfe.com/es/es"));
         PendingIntent pi=PendingIntent.getActivity(this,78,in,
                 PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-        Notification n=new NotificationCompat.Builder(this,"renfe")
+        Notification n=new Notification.Builder(this,"renfe")
                 .setContentTitle("¡Plaza encontrada!")
                 .setContentText(on+" → "+dn+" | "+date+" | "+target)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setPriority(Notification.PRIORITY_MAX)
                 .setAutoCancel(true).setContentIntent(pi).build();
         ((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).notify(78,n);
     }
