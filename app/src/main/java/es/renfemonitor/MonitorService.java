@@ -29,9 +29,12 @@ public class MonitorService extends Service {
             while (running) {
                 try {
                     update("Buscando " + on + " → " + dn + " | " + date + " | " + target);
-                    boolean found = RenfeClient.search(on,oc,dn,dc,date,target);
-                    if (found) {
-                        notifyFound(on,dn,date,target);
+                    java.util.ArrayList<RenfeClient.Journey> found = RenfeClient.search(on,oc,dn,dc,date,target);
+                    if (!found.isEmpty()) {
+                        RenfeClient.Journey j = found.get(0);
+                        String detail = j.toStringLine();
+                        update("PLAZA ENCONTRADA: " + detail);
+                        notifyFound(on,dn,date,target,detail);
                         running=false;
                         break;
                     }
@@ -55,13 +58,13 @@ public class MonitorService extends Service {
         nm.notify(ID, buildNotification(text,true,null));
     }
 
-    void notifyFound(String on,String dn,String date,String target){
+    void notifyFound(String on,String dn,String date,String target,String detail){
         Intent in=new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.renfe.com/es/es"));
         PendingIntent pi=PendingIntent.getActivity(this,78,in,
                 PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Notification n=new Notification.Builder(this,"renfe")
                 .setContentTitle("¡Plaza encontrada!")
-                .setContentText(on+" → "+dn+" | "+date+" | "+target)
+                .setContentText(detail)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setPriority(Notification.PRIORITY_MAX)
                 .setAutoCancel(true).setContentIntent(pi).build();
