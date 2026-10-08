@@ -1,7 +1,7 @@
 package es.renfemonitor;
 
 import android.Manifest;
-import android.app.*;
+import android.app.Activity;
 import android.content.*;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -15,12 +15,15 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 public class MainActivity extends Activity {
-    private static final int BLUE = Color.rgb(11, 87, 208);
-    private static final int TEXT = Color.rgb(25, 31, 40);
-    private static final int MUTED = Color.rgb(91, 99, 112);
-    private static final int BG = Color.rgb(246, 248, 252);
-    private static final int CARD = Color.WHITE;
-    private static final int BORDER = Color.rgb(224, 228, 235);
+    private static final int BG_TOP = Color.rgb(10, 8, 24);
+    private static final int BG_BOTTOM = Color.rgb(31, 11, 42);
+    private static final int CARD = Color.rgb(29, 23, 43);
+    private static final int FIELD = Color.rgb(37, 30, 53);
+    private static final int BORDER = Color.rgb(70, 58, 88);
+    private static final int WHITE = Color.WHITE;
+    private static final int MUTED = Color.rgb(185, 177, 199);
+    private static final int PINK = Color.rgb(232, 63, 173);
+    private static final int GREEN = Color.rgb(81, 205, 113);
 
     AutoCompleteTextView origin, destination;
     EditText date, time, interval;
@@ -29,12 +32,11 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle b) {
         super.onCreate(b);
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
+        getWindow().setStatusBarColor(BG_TOP);
+        getWindow().setNavigationBarColor(BG_TOP);
         if (Build.VERSION.SDK_INT >= 23) {
-            getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+            getWindow().getDecorView().setSystemUiVisibility(0);
         }
-
         buildUi();
 
         if (Build.VERSION.SDK_INT >= 33 &&
@@ -47,38 +49,48 @@ public class MainActivity extends Activity {
     void buildUi() {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        scroll.setBackgroundColor(BG);
+        scroll.setBackground(gradient(BG_TOP, BG_BOTTOM, 270));
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(18), dp(20), dp(24));
-        scroll.addView(root);
+        root.setPadding(dp(20), dp(20), dp(20), dp(30));
 
-        TextView eyebrow = text("RENFE MONITOR", 13, BLUE, Typeface.BOLD);
-        root.addView(eyebrow);
+        LinearLayout brand = new LinearLayout(this);
+        brand.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView title = text("Busca tu plaza", 31, TEXT, Typeface.BOLD);
-        LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(-1, -2);
-        titleLp.topMargin = dp(3);
-        root.addView(title, titleLp);
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(es.renfemonitor.R.drawable.ic_launcher_app);
+        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(dp(58), dp(58));
+        brand.addView(icon, iconLp);
 
-        TextView subtitle = text("Monitorización automática de Renfe en segundo plano", 15, MUTED, Typeface.NORMAL);
+        LinearLayout brandText = new LinearLayout(this);
+        brandText.setOrientation(LinearLayout.VERTICAL);
+        brandText.setPadding(dp(14), 0, 0, 0);
+        brandText.addView(text("RENFE MONITOR", 12, PINK, Typeface.BOLD));
+        TextView title = text("Busca tu plaza", 29, WHITE, Typeface.BOLD);
+        brandText.addView(title);
+        brand.addView(brandText, new LinearLayout.LayoutParams(0, -2, 1f));
+
+        root.addView(brand);
+
+        TextView subtitle = text("Monitorización automática · confirmación doble · segundo plano",
+                13, MUTED, Typeface.NORMAL);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(-1, -2);
+        subLp.topMargin = dp(10);
         subLp.bottomMargin = dp(18);
         root.addView(subtitle, subLp);
 
         LinearLayout routeCard = card();
         routeCard.addView(sectionTitle("Trayecto"));
-
         routeCard.addView(fieldLabel("ORIGEN"));
-        origin = stationField("Selecciona la estación de origen");
+        origin = stationField("Selecciona estación");
         routeCard.addView(origin, fieldParams());
 
         routeCard.addView(fieldLabel("DESTINO"));
-        destination = stationField("Selecciona la estación de destino");
-        LinearLayout.LayoutParams destLp = fieldParams();
-        destLp.topMargin = dp(10);
-        routeCard.addView(destination, destLp);
+        destination = stationField("Selecciona estación");
+        LinearLayout.LayoutParams dl = fieldParams();
+        dl.topMargin = dp(10);
+        routeCard.addView(destination, dl);
         root.addView(routeCard, cardParams());
 
         LinearLayout searchCard = card();
@@ -87,89 +99,84 @@ public class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
 
-        LinearLayout dateBox = new LinearLayout(this);
-        dateBox.setOrientation(LinearLayout.VERTICAL);
-        dateBox.addView(fieldLabel("FECHA"));
-        date = edit("dd/MM/yyyy",
-                new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(new Date()),
+        LinearLayout dateBox = smallBox("FECHA");
+        date = edit(new SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(new Date()),
                 InputType.TYPE_CLASS_DATETIME);
         dateBox.addView(date, fieldParams());
         row.addView(dateBox, weightParams());
 
-        LinearLayout timeBox = new LinearLayout(this);
-        timeBox.setOrientation(LinearLayout.VERTICAL);
-        timeBox.setPadding(dp(8), 0, dp(8), 0);
-        timeBox.addView(fieldLabel("HORA"));
-        time = edit("HH:mm", "17:40",
-                InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
+        LinearLayout timeBox = smallBox("HORA");
+        timeBox.setPadding(dp(7), 0, dp(7), 0);
+        time = edit("17:40", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
         timeBox.addView(time, fieldParams());
         row.addView(timeBox, weightParams());
 
-        LinearLayout intervalBox = new LinearLayout(this);
-        intervalBox.setOrientation(LinearLayout.VERTICAL);
-        intervalBox.addView(fieldLabel("CADA"));
-        interval = edit("seg.", "20", InputType.TYPE_CLASS_NUMBER);
+        LinearLayout intervalBox = smallBox("CADA");
+        interval = edit("20 s", InputType.TYPE_CLASS_NUMBER);
         intervalBox.addView(interval, fieldParams());
         row.addView(intervalBox, weightParams());
 
         searchCard.addView(row);
-
-        TextView helper = text(
-                "El monitor buscará únicamente trenes directos con plaza realmente disponible.",
-                13, MUTED, Typeface.NORMAL);
-        LinearLayout.LayoutParams helperLp = new LinearLayout.LayoutParams(-1, -2);
-        helperLp.topMargin = dp(10);
-        searchCard.addView(helper, helperLp);
+        TextView info = text("Solo trenes directos con tarifa normal disponible.", 12, MUTED, Typeface.NORMAL);
+        LinearLayout.LayoutParams infoLp = new LinearLayout.LayoutParams(-1, -2);
+        infoLp.topMargin = dp(10);
+        searchCard.addView(info, infoLp);
         root.addView(searchCard, cardParams());
 
         LinearLayout statusCard = card();
-        LinearLayout statusLine = new LinearLayout(this);
-        statusLine.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout sl = new LinearLayout(this);
+        sl.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView dot = text("●", 16, Color.rgb(58, 167, 91), Typeface.BOLD);
-        statusLine.addView(dot, new LinearLayout.LayoutParams(dp(22), -2));
+        TextView dot = text("●", 17, GREEN, Typeface.BOLD);
+        sl.addView(dot, new LinearLayout.LayoutParams(dp(24), -2));
+        status = text("Preparando monitor…", 14, WHITE, Typeface.BOLD);
+        sl.addView(status, new LinearLayout.LayoutParams(0, -2, 1f));
+        statusCard.addView(sl);
 
-        status = text("Cargando estaciones…", 14, TEXT, Typeface.BOLD);
-        statusLine.addView(status, new LinearLayout.LayoutParams(0, -2, 1f));
-        statusCard.addView(statusLine);
-
-        TextView bgInfo = text(
-                "Al iniciar, la búsqueda continúa aunque cierres esta pantalla. Solo recibirás una alerta cuando haya una plaza confirmada.",
-                12, MUTED, Typeface.NORMAL);
-        LinearLayout.LayoutParams infoLp = new LinearLayout.LayoutParams(-1, -2);
-        infoLp.topMargin = dp(8);
-        statusCard.addView(bgInfo, infoLp);
+        TextView bgInfo = text("Al iniciar, puedes cerrar esta pantalla: la búsqueda continuará activa en segundo plano. No habrá alertas hasta que se confirme una plaza.", 12, MUTED, Typeface.NORMAL);
+        LinearLayout.LayoutParams bgLp = new LinearLayout.LayoutParams(-1, -2);
+        bgLp.topMargin = dp(8);
+        statusCard.addView(bgInfo, bgLp);
         root.addView(statusCard, cardParams());
 
-        LinearLayout buttons = new LinearLayout(this);
-        buttons.setOrientation(LinearLayout.HORIZONTAL);
+        Button start = button("▶  INICIAR BÚSQUEDA", PINK, WHITE);
+        LinearLayout.LayoutParams startLp = new LinearLayout.LayoutParams(-1, dp(55));
+        startLp.bottomMargin = dp(10);
+        root.addView(start, startLp);
 
-        Button start = actionButton("Iniciar búsqueda", BLUE, Color.WHITE);
-        Button stop = actionButton("Detener", Color.WHITE, TEXT);
-        stop.setBackground(round(BORDER, 1, 17));
-
-        buttons.addView(start, buttonParams());
-        LinearLayout.LayoutParams stopLp = buttonParams();
-        stopLp.leftMargin = dp(10);
-        buttons.addView(stop, stopLp);
-
-        root.addView(buttons);
+        Button stop = button("■  DETENER", FIELD, WHITE);
+        root.addView(stop, new LinearLayout.LayoutParams(-1, dp(50)));
 
         start.setOnClickListener(v -> startMonitor());
         stop.setOnClickListener(v -> stopMonitor());
+
+        TextView foot = text("Renfe Monitor · v2.1", 11, Color.rgb(135, 126, 149), Typeface.NORMAL);
+        foot.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams footLp = new LinearLayout.LayoutParams(-1, -2);
+        footLp.topMargin = dp(16);
+        root.addView(foot, footLp);
+
+        scroll.addView(root);
         setContentView(scroll);
     }
 
+    LinearLayout smallBox(String label) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.addView(fieldLabel(label));
+        return box;
+    }
+
     TextView sectionTitle(String s) {
-        TextView v = text(s, 18, TEXT, Typeface.BOLD);
+        TextView v = text(s, 18, WHITE, Typeface.BOLD);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.bottomMargin = dp(13);
+        lp.bottomMargin = dp(12);
         v.setLayoutParams(lp);
         return v;
     }
 
     TextView fieldLabel(String s) {
-        return text(s, 11, MUTED, Typeface.BOLD);
+        return text(s, 10, MUTED, Typeface.BOLD);
     }
 
     AutoCompleteTextView stationField(String hint) {
@@ -178,27 +185,36 @@ public class MainActivity extends Activity {
         v.setTextSize(16);
         v.setSingleLine(true);
         v.setThreshold(1);
-        v.setTextColor(TEXT);
-        v.setHintTextColor(Color.rgb(150, 157, 168));
-        v.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        v.setPadding(dp(14), dp(11), dp(14), dp(11));
-        v.setBackground(round(Color.WHITE, 1, 14));
-        v.setDropDownBackgroundDrawable(round(Color.WHITE, 1, 12));
+        v.setTextColor(WHITE);
+        v.setHintTextColor(Color.rgb(135, 126, 149));
+        v.setPadding(dp(14), dp(10), dp(14), dp(10));
+        v.setBackground(round(FIELD, BORDER, 14));
+        v.setDropDownBackgroundDrawable(round(CARD, BORDER, 12));
         return v;
     }
 
-    EditText edit(String hint, String value, int type) {
+    EditText edit(String value, int type) {
         EditText v = new EditText(this);
-        v.setHint(hint);
         v.setText(value);
         v.setSingleLine(true);
-        v.setTextSize(15);
-        v.setTextColor(TEXT);
-        v.setHintTextColor(Color.rgb(150, 157, 168));
+        v.setTextSize(14);
+        v.setTextColor(WHITE);
+        v.setHintTextColor(Color.rgb(135, 126, 149));
         v.setInputType(type);
-        v.setPadding(dp(14), dp(10), dp(14), dp(10));
-        v.setBackground(round(Color.WHITE, 1, 14));
+        v.setPadding(dp(12), dp(8), dp(12), dp(8));
+        v.setBackground(round(FIELD, BORDER, 14));
         return v;
+    }
+
+    Button button(String label, int bg, int fg) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setTextSize(15);
+        b.setAllCaps(false);
+        b.setTextColor(fg);
+        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        b.setBackground(round(bg, bg == FIELD ? BORDER : bg, 17));
+        return b;
     }
 
     TextView text(String s, float size, int color, int style) {
@@ -214,7 +230,7 @@ public class MainActivity extends Activity {
         LinearLayout v = new LinearLayout(this);
         v.setOrientation(LinearLayout.VERTICAL);
         v.setPadding(dp(16), dp(16), dp(16), dp(16));
-        v.setBackground(round(CARD, 1, 20));
+        v.setBackground(round(CARD, BORDER, 20));
         return v;
     }
 
@@ -225,7 +241,7 @@ public class MainActivity extends Activity {
     }
 
     LinearLayout.LayoutParams fieldParams() {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(52));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(50));
         lp.topMargin = dp(5);
         return lp;
     }
@@ -234,33 +250,23 @@ public class MainActivity extends Activity {
         return new LinearLayout.LayoutParams(0, -2, 1f);
     }
 
-    LinearLayout.LayoutParams buttonParams() {
-        return new LinearLayout.LayoutParams(0, dp(54), 1f);
+    GradientDrawable round(int fill, int stroke, float r) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(fill);
+        d.setCornerRadius(dp(r));
+        d.setStroke(dp(1), stroke);
+        return d;
     }
 
-    Button actionButton(String label, int bg, int fg) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setTextSize(15);
-        b.setTextColor(fg);
-        b.setAllCaps(false);
-        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-        b.setGravity(Gravity.CENTER);
-        b.setPadding(dp(10), 0, dp(10), 0);
-        b.setBackground(round(bg, 0, 17));
-        return b;
+    GradientDrawable gradient(int a, int b, int angle) {
+        GradientDrawable d = new GradientDrawable(
+                GradientDrawable.Orientation.TL_BR, new int[]{a, b});
+        d.setCornerRadius(0);
+        return d;
     }
 
-    GradientDrawable round(int color, int stroke, float radiusDp) {
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(color);
-        g.setCornerRadius(dp(radiusDp));
-        if (stroke > 0) g.setStroke(dp(stroke), BORDER);
-        return g;
-    }
-
-    int dp(float n) {
-        return Math.round(n * getResources().getDisplayMetrics().density);
+    int dp(float x) {
+        return Math.round(x * getResources().getDisplayMetrics().density);
     }
 
     void loadStations() {
@@ -272,18 +278,15 @@ public class MainActivity extends Activity {
                     labels.add(s.name + " [" + s.code + "]");
                 }
                 runOnUiThread(() -> {
-                    ArrayAdapter<String> adapter =
-                            new ArrayAdapter<>(this,
-                                    android.R.layout.simple_dropdown_item_1line, labels);
+                    ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                            this, android.R.layout.simple_dropdown_item_1line, labels);
                     origin.setAdapter(adapter);
                     destination.setAdapter(adapter);
-
-                    if (stationList.items.size() > 0) {
+                    if (!stationList.items.isEmpty()) {
                         origin.setText(findDefault("ALCÁZAR"), false);
                         destination.setText(findDefault("ALICANTE"), false);
                     }
-
-                    status.setText("Listo para buscar · " + stationList.items.size() + " estaciones");
+                    status.setText("Listo · " + stationList.items.size() + " estaciones");
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> status.setText("No se pudieron cargar las estaciones"));
@@ -298,7 +301,8 @@ public class MainActivity extends Activity {
                 return s.name + " [" + s.code + "]";
             }
         }
-        return stationList.items.get(0).name + " [" + stationList.items.get(0).code + "]";
+        return stationList.items.isEmpty() ? "" :
+                stationList.items.get(0).name + " [" + stationList.items.get(0).code + "]";
     }
 
     void startMonitor() {
@@ -308,35 +312,35 @@ public class MainActivity extends Activity {
             String oc = codeFromLabel(o), dc = codeFromLabel(d);
 
             if (oc == null || dc == null) {
-                status.setText("Selecciona una estación de la lista.");
+                status.setText("Selecciona las estaciones de la lista.");
                 return;
             }
-
             if (oc.equals(dc)) {
-                status.setText("Origen y destino no pueden ser la misma estación.");
+                status.setText("Origen y destino no pueden coincidir.");
                 return;
             }
 
-            validateDate(date.getText().toString().trim());
-            validateTime(time.getText().toString().trim());
-            int sec = Math.max(10, Integer.parseInt(interval.getText().toString().trim()));
+            String ds = date.getText().toString().trim();
+            String ts = time.getText().toString().trim();
+            validateDate(ds);
+            validateTime(ts);
+            int sec = Math.max(10, Integer.parseInt(interval.getText().toString().replace("s", "").trim()));
 
             Intent i = new Intent(this, MonitorService.class);
             i.putExtra("originName", labelName(o));
             i.putExtra("originCode", oc);
             i.putExtra("destName", labelName(d));
             i.putExtra("destCode", dc);
-            i.putExtra("date", date.getText().toString().trim());
-            i.putExtra("time", time.getText().toString().trim());
+            i.putExtra("date", ds);
+            i.putExtra("time", ts);
             i.putExtra("interval", sec);
 
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(i);
             else startService(i);
 
-            status.setText("Buscando en segundo plano · " +
-                    labelName(o) + " → " + labelName(d));
+            status.setText("Monitor activo · buscando en segundo plano…");
         } catch (Exception e) {
-            status.setText("Revisa los datos introducidos.");
+            status.setText("Revisa fecha, hora, intervalo y estaciones.");
         }
     }
 
