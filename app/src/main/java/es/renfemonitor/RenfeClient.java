@@ -91,7 +91,10 @@ public class RenfeClient {
         f.put("Idioma","es"); f.put("Pais","ES");
         post(BASE + "/vol/buscarTren.do", f);
 
-        String sid = "0123456789ABCDEF0123456789ABCDEF/renfeandroid";
+        String dwrCookie = getCookie(cm, BASE, "DWRSESSIONID");
+        String sid = (dwrCookie == null || dwrCookie.isEmpty())
+                ? "0123456789ABCDEF0123456789ABCDEF/renfecli"
+                : dwrCookie + "/renfecli";
 
         String body =
             "callCount=1\nwindowName=\nc0-scriptName=trainEnlacesManager\n" +
