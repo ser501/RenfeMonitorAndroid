@@ -12,6 +12,7 @@ public class MonitorService extends Service {
 
     @Override public void onCreate() {
         super.onCreate();
+        RenfeClient.init(getApplicationContext());
         createChannel();
         startForeground(ID, buildNotification("Preparando monitor…", true, null));
     }
