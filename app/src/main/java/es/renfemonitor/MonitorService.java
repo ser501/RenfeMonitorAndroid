@@ -96,7 +96,6 @@ public class MonitorService extends Service {
                 .setContentText(text)
                 .setSmallIcon(es.renfemonitor.R.drawable.ic_train_notification)
                 .setOngoing(true)
-                .setSilent(true)
                 .setCategory(Notification.CATEGORY_SERVICE)
                 .build();
     }
