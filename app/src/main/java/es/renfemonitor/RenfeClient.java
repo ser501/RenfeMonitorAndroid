@@ -1,6 +1,7 @@
 package es.renfemonitor;
 
-import android.util.Log;
+import android.content.Context;
+import org.chromium.net.CronetEngine;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.*;
@@ -15,6 +16,24 @@ public class RenfeClient {
     static final String STATIONS = "https://www.renfe.com/content/dam/renfe/es/General/buscadores/javascript/estacionesEstaticas.js";
     static final String PAGE = "/vol/buscarTrenEnlaces.do";
     static final String TAG = "RenfeMonitor";
+    static volatile CronetEngine CRONET;
+    static volatile boolean CRONET_READY = false;
+
+    static void init(Context context) {
+        if (CRONET_READY) return;
+        synchronized (RenfeClient.class) {
+            if (CRONET_READY) return;
+            File dir = new File(context.getFilesDir(), "cronet");
+            if (!dir.exists()) dir.mkdirs();
+            CRONET = new CronetEngine.Builder(context.getApplicationContext())
+                    .setStoragePath(dir.getAbsolutePath())
+                    .setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36")
+                    .enableHttp2(false)
+                    .enableQuic(false)
+                    .build();
+            CRONET_READY = true;
+        }
+    }
 
     static class Station {
         final String code, name;
@@ -92,10 +111,7 @@ public class RenfeClient {
         f.put("Idioma","es"); f.put("Pais","ES");
         post(BASE + "/vol/buscarTren.do", f);
 
-        String dwrCookie = getCookie(cm, BASE, "DWRSESSIONID");
-        String sid = (dwrCookie == null || dwrCookie.isEmpty())
-            ? "0123456789ABCDEF0123456789ABCDEF/renfeandroid"
-            : dwrCookie + "/renfeandroid";
+        String sid = "0123456789ABCDEF0123456789ABCDEF/renfeandroid";
 
         String body =
             "callCount=1\nwindowName=\nc0-scriptName=trainEnlacesManager\n" +
@@ -165,6 +181,19 @@ public class RenfeClient {
             }
         }
         return out;
+    }
+
+    static boolean hasNormalFare(JSONObject t) {
+        JSONArray fares = t.optJSONArray("tarifasDisponibles");
+        if (fares == null || fares.length() == 0) return false;
+        for (int i=0;i<fares.length();i++) {
+            JSONObject f = fares.optJSONObject(i);
+            if (f == null) continue;
+            double p = parsePrice(f.optString("precioTarifa",""));
+            boolean hOnly = f.optBoolean("soloPlazasH", false);
+            if (p > 0 && !hOnly) return true;
+        }
+        return false;
     }
 
     static String onSafe(JSONObject o,String k){ return o.optString(k,""); }
@@ -244,7 +273,8 @@ public class RenfeClient {
     static String postRaw(String u,String body,String type)throws Exception{return request("POST",u,body,type);}
 
     static String request(String method,String u,String body,String type)throws Exception{
-        HttpURLConnection c=(HttpURLConnection)new URL(u).openConnection();
+        if (!CRONET_READY) throw new IOException("Cronet no inicializado");
+        HttpURLConnection c=(HttpURLConnection)CRONET.openConnection(new URL(u));
         c.setConnectTimeout(20000); c.setReadTimeout(30000); c.setRequestMethod(method);
         c.setRequestProperty("User-Agent","Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 Chrome/154 Mobile Safari/537.36");
         c.setRequestProperty("Accept","*/*");
