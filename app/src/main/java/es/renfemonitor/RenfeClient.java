@@ -177,7 +177,7 @@ public class RenfeClient {
                     if (leg != null) x.train=stripZeros(leg.optString("cdgoTren",""));
                 }
                 if (x.train.isEmpty()) x.train = t.optString("cdgoTren","");
-                if (x.departure.equals(target)) out.add(x);
+                if (x.departure.equals(target) && x.available && x.direct) out.add(x);
             }
         }
         return out;
