@@ -291,12 +291,32 @@ public class MainActivity extends Activity {
                     labels.add(s.name + " [" + s.code + "]");
                 }
                 runOnUiThread(() -> {
-                    ArrayAdapter<String> adapter = new ArrayAdapter<>(
-                            this, android.R.layout.simple_dropdown_item_1line, labels);
+                    ArrayAdapter<String> adapter = new ArrayAdapter<String>(
+                            this, android.R.layout.simple_list_item_1, labels) {
+                        @Override public View getView(int position, View convertView, android.view.ViewGroup parent) {
+                            TextView v = (TextView) super.getView(position, convertView, parent);
+                            v.setTextColor(WHITE);
+                            v.setTypeface(Typeface.create("sans", Typeface.NORMAL));
+                            v.setTextSize(16);
+                            v.setPadding(dp(16), dp(12), dp(16), dp(12));
+                            v.setBackgroundColor(CARD);
+                            return v;
+                        }
+
+                        @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parent) {
+                            TextView v = (TextView) super.getDropDownView(position, convertView, parent);
+                            v.setTextColor(WHITE);
+                            v.setTypeface(Typeface.create("sans", Typeface.NORMAL));
+                            v.setTextSize(16);
+                            v.setPadding(dp(16), dp(12), dp(16), dp(12));
+                            v.setBackgroundColor(CARD);
+                            return v;
+                        }
+                    };
                     origin.setAdapter(adapter);
                     destination.setAdapter(adapter);
                     if (!stationList.items.isEmpty()) {
-                        origin.setText(findDefault("ALCÁZAR"), false);
+                        origin.setText(findDefault("ALCAZAR"), false);
                         destination.setText(findDefault("ALICANTE"), false);
                     }
                     status.setText("Listo · " + stationList.items.size() + " estaciones");
