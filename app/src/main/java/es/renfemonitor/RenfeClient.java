@@ -98,14 +98,14 @@ public class RenfeClient {
             "c0-methodName=getTrainsList\nc0-id=0\n" +
             "c0-param0=Object_Object:{atendo:reference:c0-e1, sinEnlace:reference:c0-e2, plazaH:reference:c0-e3, tipoFranjaI:reference:c0-e4, tipoFranjaV:reference:c0-e5, horaFranjaIda:reference:c0-e6, horaFranjaVuelta:reference:c0-e7, fechaSalida:reference:c0-e8, fechaVuelta:reference:c0-e9, adultos:reference:c0-e10, ninos:reference:c0-e11, ninosMenores:reference:c0-e12, trayecto:reference:c0-e13, idaVuelta:reference:c0-e14, conMascota:reference:c0-e15, conBicicleta:reference:c0-e16}\n" +
             "c0-e1=string:false\nc0-e2=string:true\nc0-e3=string:false\nc0-e4=string:\nc0-e5=string:\nc0-e6=string:\nc0-e7=string:\n" +
-            "c0-e8=string:" + esc(d) + "\nc0-e9=string:\nc0-e10=string:1\nc0-e11=string:0\nc0-e12=string:0\nc0-e13=string:I\nc0-e14=string:false\nc0-e15=string:false\nc0-e16=string:false\n" +
+            "c0-e8=string:" + esc(d) + "\nc0-e9=string:\nc0-e10=string:1\nc0-e11=string:0\nc0-e12=string:0\nc0-e13=string:I\nc0-e14=string:\nc0-e15=string:false\nc0-e16=string:false\n" +
             "batchId=0\ninstanceId=0\npage=" + esc(PAGE) + "\nscriptSessionId=" + sid + "\n";
 
         String r = postRaw(BASE + "/vol/dwr/call/plaincall/trainEnlacesManager.getTrainsList.dwr", body, "text/plain;charset=UTF-8");
-        return parseJourneys(r, target);
+        return parseJourneys(r, target, oc, dc, d);
     }
 
-    static ArrayList<Journey> parseJourneys(String script, String target) throws Exception {
+    static ArrayList<Journey> parseJourneys(String script, String target, String originCode, String destinationCode, String date) throws Exception {
         if (script.contains("r.handleException(")) {
             throw new IOException("Renfe ha rechazado la consulta DWR.");
         }
@@ -137,6 +137,12 @@ public class RenfeClient {
                 x.from = t.optString("descripcionEstacionOrigen",onSafe(block,"descripcionEstacionOrigen"));
                 x.to = t.optString("descripcionEstacionDestino",onSafe(block,"descripcionEstacionDestino"));
                 x.direct = t.optBoolean("directo",false);
+                String realFrom = t.optString("codigoEstacionOrigen", "");
+                String realTo = t.optString("codigoEstacionDestino", "");
+                if (!originCode.equals(realFrom) || !destinationCode.equals(realTo)) continue;
+                String expectedDate = toIsoDate(date);
+                String journeyDate = t.optString("fecha", "");
+                if (!expectedDate.isEmpty() && !expectedDate.equals(journeyDate)) continue;
                 x.price = parsePrice(t.optString("tarifaMinima",""));
                 JSONArray fares = t.optJSONArray("tarifasDisponibles");
                 boolean hasNormalFare = false;
@@ -185,6 +191,16 @@ public class RenfeClient {
             if (p > 0 && !hOnly) return true;
         }
         return false;
+    }
+
+    static String toIsoDate(String d) {
+        try {
+            String[] p = d.split("/");
+            if (p.length != 3) return "";
+            return p[2] + "-" + p[1] + "-" + p[0];
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     static String onSafe(JSONObject o,String k){ return o.optString(k,""); }
@@ -270,7 +286,7 @@ public class RenfeClient {
         c.setRequestProperty("Accept","*/*");
         c.setRequestProperty("Accept-Language","es-ES,es;q=0.9");
         c.setRequestProperty("Origin",BASE);
-        c.setRequestProperty("Referer",BASE+"/vol/inicio.do");
+        c.setRequestProperty("Referer",u.contains("/dwr/") ? BASE+PAGE : BASE+"/vol/inicio.do");
         if(body!=null){
             c.setDoOutput(true); c.setRequestProperty("Content-Type",type);
             try(OutputStream os=c.getOutputStream()){os.write(body.getBytes(StandardCharsets.UTF_8));}
