@@ -10,7 +10,7 @@ public class MonitorService extends Service {
     static final int SEARCH_ID = 77;
     static final int FOUND_ID = 78;
     static final String SEARCH_CHANNEL = "renfe_search_v2";
-    static final String FOUND_CHANNEL = "renfe_found_v2";
+    static final String FOUND_CHANNEL = "renfe_found_v3";
 
     volatile boolean running = false;
     volatile Thread worker;
@@ -136,8 +136,17 @@ public class MonitorService extends Service {
 
         NotificationChannel found = new NotificationChannel(
                 FOUND_CHANNEL, "Plazas encontradas", NotificationManager.IMPORTANCE_HIGH);
-        found.setDescription("Alerta cuando Renfe Monitor confirma una plaza disponible.");
+        found.setDescription("Alerta con sonido cuando Renfe Monitor confirma una plaza disponible.");
+
+        android.net.Uri sound = android.media.RingtoneManager.getDefaultUri(
+                android.media.RingtoneManager.TYPE_NOTIFICATION);
+        android.media.AudioAttributes audio = new android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build();
+        found.setSound(sound, audio);
         found.enableVibration(true);
+        found.setVibrationPattern(new long[]{0, 250, 120, 250});
         nm.createNotificationChannel(found);
     }
 
