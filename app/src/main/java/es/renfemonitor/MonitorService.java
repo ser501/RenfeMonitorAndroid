@@ -69,7 +69,7 @@ public class MonitorService extends Service {
     }
 
     Notification buildNotification(String text, boolean ongoing, PendingIntent pi){
-        NotificationCompat.Builder b=new NotificationCompat.Builder(this,"renfe")
+        Notification.Builder b=new Notification.Builder(this,"renfe")
                 .setContentTitle("Renfe Monitor")
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
