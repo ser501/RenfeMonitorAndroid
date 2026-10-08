@@ -76,7 +76,7 @@ public class MainActivity extends Activity {
 
         routeCard.addView(fieldLabel("DESTINO"));
         destination = stationField("Selecciona la estación de destino");
-        LinearLayout destLp = fieldParams();
+        LinearLayout.LayoutParams destLp = fieldParams();
         destLp.topMargin = dp(10);
         routeCard.addView(destination, destLp);
         root.addView(routeCard, cardParams());
