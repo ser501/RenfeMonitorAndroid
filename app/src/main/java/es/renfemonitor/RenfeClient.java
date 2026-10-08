@@ -7,6 +7,7 @@ import java.net.*;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.text.Normalizer;
 import java.util.regex.*;
 
 public class RenfeClient {
@@ -61,20 +62,21 @@ public class RenfeClient {
 
     static String clean(String s) {
         if (s == null) return "";
-        return s.replace("\\u00c1","Á").replace("\\u00e1","á")
+        String normalized = s
+            .replace("\\u00c1","Á").replace("\\u00e1","á")
             .replace("\\u00c9","É").replace("\\u00e9","é")
             .replace("\\u00cd","Í").replace("\\u00ed","í")
             .replace("\\u00d3","Ó").replace("\\u00f3","ó")
             .replace("\\u00da","Ú").replace("\\u00fa","ú")
-            .replace("\\u00d1","Ñ").replace("\\u00f1","ñ")
-            // Evita problemas de codificación y muestra siempre ALCAZAR.
-            .replace("ALCÁZAR", "ALCAZAR")
-            .replace("Alcázar", "Alcazar")
-            .replace("alcázar", "alcazar")
-            .replace("ALC�ZAR", "ALCAZAR")
-            .replace("Alc�zar", "Alcazar")
-            .replace("alc�zar", "alcazar")
-            .trim();
+            .replace("\\u00d1","Ñ").replace("\\u00f1","ñ");
+
+        // Las estaciones se muestran sin tildes para evitar problemas de
+        // codificación en nombres como "ALCÁZAR DE SAN JUAN".
+        normalized = Normalizer.normalize(normalized, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}+", "")
+            .replace("�", "");
+
+        return normalized.trim();
     }
 
     static ArrayList<Journey> search(String on, String oc, String dn, String dc, String date, String target) throws Exception {
