@@ -312,7 +312,7 @@ public class MainActivity extends Activity {
         if (history.length() > 0) {
             Button clear = button("🗑  LIMPIAR HISTORIAL", FIELD, WHITE);
             clear.setOnClickListener(v -> {
-                getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove("history").apply();
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit().remove(HISTORY).apply();
                 showSavedScreen();
             });
             historyCard.addView(clear, new LinearLayout.LayoutParams(-1, dp(48)));
