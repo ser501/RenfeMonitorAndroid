@@ -2,15 +2,18 @@ package es.renfemonitor;
 
 import android.app.*;
 import android.content.*;
+import android.media.*;
 import android.net.Uri;
 import android.os.*;
+import android.util.Log;
 import java.util.*;
 
 public class MonitorService extends Service {
     static final int SEARCH_ID = 77;
     static final int FOUND_ID = 78;
     static final String SEARCH_CHANNEL = "renfe_search_v2";
-    static final String FOUND_CHANNEL = "renfe_found_v4";
+    static final String FOUND_CHANNEL = "renfe_found_v5";
+    static final String PREFS = "monitor_state";
 
     volatile boolean running = false;
     volatile Thread worker;
@@ -19,7 +22,7 @@ public class MonitorService extends Service {
         super.onCreate();
         createChannels();
         startForeground(SEARCH_ID, buildSearchNotification(
-                "Buscando plazas…", "El monitor seguirá en segundo plano y sin alertas."));
+                "Buscando plazas…", "El monitor seguirá buscando en segundo plano."));
     }
 
     @Override public int onStartCommand(Intent i, int flags, int startId) {
@@ -37,6 +40,8 @@ public class MonitorService extends Service {
         }
 
         running = true;
+        saveState(true, false, "", "");
+
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         nm.notify(SEARCH_ID, buildSearchNotification(
                 "Buscando plazas…",
@@ -50,28 +55,42 @@ public class MonitorService extends Service {
                                 RenfeClient.search(on, oc, dn, dc, date, target);
 
                         if (!found.isEmpty()) {
-                            // Segunda consulta completamente nueva antes de alertar.
+                            Log.i("RenfeMonitor", "Candidato encontrado. Confirmando…");
                             Thread.sleep(1200L);
+
                             ArrayList<RenfeClient.Journey> confirm =
                                     RenfeClient.search(on, oc, dn, dc, date, target);
 
                             if (!confirm.isEmpty()) {
                                 RenfeClient.Journey j = confirm.get(0);
                                 String detail = j.toStringLine();
-                                notifyFound(on, dn, date, target, detail);
+
+                                Log.i("RenfeMonitor", "PLAZA CONFIRMADA: " + detail);
                                 running = false;
+                                saveState(false, true, detail,
+                                        on + " → " + dn + " | " + date + " | " + target);
+
+                                showFoundNotification(on, dn, date, target, detail);
+
+                                // El aviso de búsqueda no puede seguir apareciendo
+                                // después de una plaza confirmada.
+                                nm.cancel(SEARCH_ID);
+                                stopForeground(true);
+                                stopSelfResult(startId);
                                 break;
                             }
                         }
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         break;
-                    } catch (Exception ignored) {
-                        // Errores/transitorios no generan alertas.
-                        // El monitor continúa buscando en segundo plano.
+                    } catch (Exception e) {
+                        Log.e("RenfeMonitor", "Error durante la comprobación", e);
+                        saveState(true, false, "", safe(e.getMessage()));
+                        // No se alerta por errores transitorios; la búsqueda continúa.
                     }
 
                     if (!running) break;
+
                     try {
                         Thread.sleep(sec * 1000L);
                     } catch (InterruptedException e) {
@@ -81,7 +100,11 @@ public class MonitorService extends Service {
                 }
             } finally {
                 if (Thread.currentThread() == worker) {
-                    stopSelf(startId);
+                    if (!running) {
+                        nm.cancel(SEARCH_ID);
+                        try { stopForeground(true); } catch (Exception ignored) {}
+                    }
+                    stopSelfResult(startId);
                 }
             }
         }, "RenfeMonitor");
@@ -96,39 +119,49 @@ public class MonitorService extends Service {
                 .setContentText(text)
                 .setSmallIcon(es.renfemonitor.R.drawable.ic_train_notification)
                 .setOngoing(true)
+                .setSilent(true)
                 .setCategory(Notification.CATEGORY_SERVICE)
                 .build();
     }
 
-    void notifyFound(String on, String dn, String date, String target, String detail) {
+    void showFoundNotification(String on, String dn, String date, String target, String detail) {
         Intent in = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.renfe.com/es/es/"));
         PendingIntent pi = PendingIntent.getActivity(
                 this, FOUND_ID, in,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-        String route = on + " → " + dn;
         Notification n = new Notification.Builder(this, FOUND_CHANNEL)
-                .setContentTitle("¡Plaza encontrada!")
+                .setContentTitle("¡PLAZA CONFIRMADA!")
                 .setContentText(detail)
                 .setStyle(new Notification.BigTextStyle()
-                        .bigText(route + "\n" + date + " · " + target + "\n" + detail))
+                        .bigText("🚆 " + on + " → " + dn + "\n"
+                                + date + " · " + target + "\n"
+                                + detail))
                 .setSmallIcon(es.renfemonitor.R.drawable.ic_train_notification)
                 .setContentIntent(pi)
                 .setAutoCancel(true)
                 .setCategory(Notification.CATEGORY_EVENT)
                 .setPriority(Notification.PRIORITY_MAX)
+                .setOnlyAlertOnce(false)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
                 .build();
 
-        ((NotificationManager) getSystemService(NOTIFICATION_SERVICE)).notify(FOUND_ID, n);
+        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
 
-        // Refuerzo sonoro: además del sonido del canal de notificación,
-        // emite un aviso corto en el flujo de notificaciones del sistema.
+        if (!nm.areNotificationsEnabled()) {
+            Log.e("RenfeMonitor", "Las notificaciones están desactivadas para la aplicación.");
+        } else {
+            nm.notify(FOUND_ID, n);
+        }
+
+        // Refuerzo sonoro inmediato, además del sonido del canal.
         try {
-            android.media.ToneGenerator tone =
-                    new android.media.ToneGenerator(android.media.AudioManager.STREAM_NOTIFICATION, 100);
-            tone.startTone(android.media.ToneGenerator.TONE_PROP_BEEP, 900);
-            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(tone::release, 1100L);
-        } catch (Exception ignored) {}
+            ToneGenerator tone = new ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100);
+            tone.startTone(ToneGenerator.TONE_PROP_BEEP2, 1000);
+            new Handler(Looper.getMainLooper()).postDelayed(tone::release, 1200L);
+        } catch (Exception e) {
+            Log.e("RenfeMonitor", "No se pudo reproducir el sonido", e);
+        }
     }
 
     void createChannels() {
@@ -138,25 +171,36 @@ public class MonitorService extends Service {
 
         NotificationChannel search = new NotificationChannel(
                 SEARCH_CHANNEL, "Búsqueda en segundo plano", NotificationManager.IMPORTANCE_LOW);
-        search.setDescription("Indica que Renfe Monitor sigue buscando. No emite sonido ni vibración.");
+        search.setDescription("Indica que Renfe Monitor sigue buscando.");
         search.setSound(null, null);
         search.enableVibration(false);
         nm.createNotificationChannel(search);
 
         NotificationChannel found = new NotificationChannel(
                 FOUND_CHANNEL, "Plazas encontradas", NotificationManager.IMPORTANCE_HIGH);
-        found.setDescription("Alerta con sonido cuando Renfe Monitor confirma una plaza disponible.");
-
-        android.net.Uri sound = android.media.RingtoneManager.getDefaultUri(
-                android.media.RingtoneManager.TYPE_NOTIFICATION);
-        android.media.AudioAttributes audio = new android.media.AudioAttributes.Builder()
-                .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
-                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+        found.setDescription("Alerta sonora cuando Renfe Monitor confirma una plaza.");
+        Uri sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+        AudioAttributes audio = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build();
         found.setSound(sound, audio);
         found.enableVibration(true);
-        found.setVibrationPattern(new long[]{0, 250, 120, 250});
+        found.setVibrationPattern(new long[]{0, 250, 120, 250, 120, 400});
         nm.createNotificationChannel(found);
+    }
+
+    void saveState(boolean active, boolean found, String detail, String meta) {
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                .putBoolean("active", active)
+                .putBoolean("found", found)
+                .putString("detail", detail == null ? "" : detail)
+                .putString("meta", meta == null ? "" : meta)
+                .apply();
+    }
+
+    String safe(String s) {
+        return s == null ? "error" : s;
     }
 
     @Override public void onDestroy() {
