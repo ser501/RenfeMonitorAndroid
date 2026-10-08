@@ -86,7 +86,7 @@ public class RenfeClient {
         f.put("FechaIdaSel",d); f.put("FechaVueltaSel","");
         f.put("_fechaIdaVisual",d); f.put("_fechaVueltaVisual","");
         f.put("adultos_","1"); f.put("ninos_","0"); f.put("ninosMenores","0");
-        f.put("codPromocional",""); f.put("plazaH","false"); f.put("sinEnlace","false");
+        f.put("codPromocional",""); f.put("plazaH","false"); f.put("sinEnlace","true");
         f.put("conMascota","false"); f.put("conBicicleta","false"); f.put("asistencia","false");
         f.put("franjaHoraI",""); f.put("franjaHoraV","");
         f.put("Idioma","es"); f.put("Pais","ES");
@@ -101,7 +101,7 @@ public class RenfeClient {
             "callCount=1\nwindowName=\nc0-scriptName=trainEnlacesManager\n" +
             "c0-methodName=getTrainsList\nc0-id=0\n" +
             "c0-param0=Object_Object:{atendo:reference:c0-e1, sinEnlace:reference:c0-e2, plazaH:reference:c0-e3, tipoFranjaI:reference:c0-e4, tipoFranjaV:reference:c0-e5, horaFranjaIda:reference:c0-e6, horaFranjaVuelta:reference:c0-e7, fechaSalida:reference:c0-e8, fechaVuelta:reference:c0-e9, adultos:reference:c0-e10, ninos:reference:c0-e11, ninosMenores:reference:c0-e12, trayecto:reference:c0-e13, idaVuelta:reference:c0-e14, conMascota:reference:c0-e15, conBicicleta:reference:c0-e16}\n" +
-            "c0-e1=string:false\nc0-e2=string:false\nc0-e3=string:false\nc0-e4=string:\nc0-e5=string:\nc0-e6=string:\nc0-e7=string:\n" +
+            "c0-e1=string:false\nc0-e2=string:true\nc0-e3=string:false\nc0-e4=string:\nc0-e5=string:\nc0-e6=string:\nc0-e7=string:\n" +
             "c0-e8=string:" + esc(d) + "\nc0-e9=string:\nc0-e10=string:1\nc0-e11=string:0\nc0-e12=string:0\nc0-e13=string:I\nc0-e14=string:false\nc0-e15=string:false\nc0-e16=string:false\n" +
             "batchId=0\ninstanceId=0\npage=" + esc(PAGE) + "\nscriptSessionId=" + sid + "\n";
 
