@@ -6,11 +6,10 @@ import android.content.*;
 import android.content.pm.PackageManager;
 import android.os.*;
 import android.widget.*;
-import androidx.appcompat.app.AppCompatActivity;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends android.app.Activity {
     AutoCompleteTextView origin, destination;
     EditText date, time, interval;
     TextView status;
