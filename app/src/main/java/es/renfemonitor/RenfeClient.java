@@ -23,7 +23,7 @@ public class RenfeClient {
         String s = get(STATIONS);
         ArrayList<Station> out = new ArrayList<>();
         Pattern p = Pattern.compile(
-            "\\{[^{}]*?cdgoEstacion\\s*:\\s*[\"']([^\"']+)[\"'][^{}]*?desgEstacion\\s*:\\s*[\"']([^\"']+)[\"'][^{}]*?\\}",
+            "\\{[^{}]*?cdgoEstacion\\\s*:\\\s*[\"']([^\"']+)[\"'][^{}]*?desgEstacion\\\s*:\\\s*[\"']([^\"']+)[\"'][^{}]*?\\}",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
         Matcher m = p.matcher(s);
         while (m.find()) {
@@ -32,7 +32,7 @@ public class RenfeClient {
         }
         if (out.isEmpty()) {
             Pattern j = Pattern.compile(
-                "\"cdgoEstacion\"\\s*:\\s*\"([^\"]+)\".*?\"desgEstacion\"\\s*:\\s*\"([^\"]+)\"",
+                "\"cdgoEstacion\"\\\s*:\\\s*\"([^\"]+)\".*?\"desgEstacion\"\\\s*:\\\s*\"([^\"]+)\"",
                 Pattern.DOTALL);
             m = j.matcher(s);
             while (m.find()) out.add(new Station(m.group(1).trim(),m.group(2).trim()));
@@ -77,12 +77,12 @@ public class RenfeClient {
 
     static boolean containsAvailableAtExactHour(String r, String target) {
         Pattern p = Pattern.compile(
-            "\"?horaSalida\"?\s*[:=]\s*\"?" + Pattern.quote(target) +
-            "\"?[^{}]{0,1800}?\"?completo\"?\s*[:=]\s*false",
+            "\"?horaSalida\"?\\s*[:=]\\s*\"?" + Pattern.quote(target) +
+            "\"?[^{}]{0,1800}?\"?completo\"?\\s*[:=]\\s*false",
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
         if (p.matcher(r).find()) return true;
         Pattern p2 = Pattern.compile(
-            "\"?completo\"?\s*[:=]\s*false[^{}]{0,1800}?\"?horaSalida\"?\s*[:=]\s*\"?" +
+            "\"?completo\"?\\s*[:=]\\s*false[^{}]{0,1800}?\"?horaSalida\"?\\s*[:=]\\s*\"?" +
             Pattern.quote(target),
             Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
         return p2.matcher(r).find();
