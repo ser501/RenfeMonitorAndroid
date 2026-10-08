@@ -141,8 +141,20 @@ public class RenfeClient {
                 x.from = t.optString("descripcionEstacionOrigen",onSafe(block,"descripcionEstacionOrigen"));
                 x.to = t.optString("descripcionEstacionDestino",onSafe(block,"descripcionEstacionDestino"));
                 x.direct = t.optBoolean("directo",false);
-                x.available = !t.optBoolean("completo",true) && !t.optBoolean("soloPlazaH",false);
                 x.price = parsePrice(t.optString("tarifaMinima",""));
+                if (x.price <= 0) {
+                    JSONArray fares = t.optJSONArray("tarifasDisponibles");
+                    if (fares != null) {
+                        for (int k = 0; k < fares.length(); k++) {
+                            JSONObject fare = fares.optJSONObject(k);
+                            if (fare == null) continue;
+                            double fp = parsePrice(fare.optString("precioTarifa",""));
+                            if (fp > 0 && (x.price <= 0 || fp < x.price)) x.price = fp;
+                        }
+                    }
+                }
+                x.available = !t.optBoolean("completo",true) && x.price > 0;
+                if (t.optBoolean("soloPlazaH",false)) x.available = false;
                 JSONArray legs=t.optJSONArray("trayectos");
                 if (legs != null && legs.length()>0) {
                     JSONObject leg=legs.optJSONObject(0);
