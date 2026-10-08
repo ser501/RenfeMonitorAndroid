@@ -138,19 +138,30 @@ public class RenfeClient {
                 x.to = t.optString("descripcionEstacionDestino",onSafe(block,"descripcionEstacionDestino"));
                 x.direct = t.optBoolean("directo",false);
                 x.price = parsePrice(t.optString("tarifaMinima",""));
-                if (x.price <= 0) {
-                    JSONArray fares = t.optJSONArray("tarifasDisponibles");
-                    if (fares != null) {
-                        for (int k = 0; k < fares.length(); k++) {
-                            JSONObject fare = fares.optJSONObject(k);
-                            if (fare == null) continue;
-                            double fp = parsePrice(fare.optString("precioTarifa",""));
-                            if (fp > 0 && (x.price <= 0 || fp < x.price)) x.price = fp;
-                        }
+                JSONArray fares = t.optJSONArray("tarifasDisponibles");
+                boolean hasNormalFare = false;
+                boolean hasFare = false;
+                if (fares != null) {
+                    for (int k = 0; k < fares.length(); k++) {
+                        JSONObject fare = fares.optJSONObject(k);
+                        if (fare == null) continue;
+                        hasFare = true;
+                        double fp = parsePrice(fare.optString("precioTarifa",""));
+                        if (fp > 0 && (x.price <= 0 || fp < x.price)) x.price = fp;
+                        if (fp > 0 && !fare.optBoolean("soloPlazasH", false)) hasNormalFare = true;
                     }
                 }
-                x.available = !t.optBoolean("completo",true) && x.price > 0;
-                if (t.optBoolean("soloPlazaH",false)) x.available = false;
+                String reason = t.optString("razonNoDisponible", "");
+                boolean blockedReason = !reason.isEmpty() && !"8".equals(reason);
+                // Replica la lógica de disponibilidad del frontend de Renfe:
+                // completo -> no; sin tarifas -> no; código de bloqueo distinto
+                // de 8 -> no; y si todas las tarifas restantes son reservadas
+                // (soloPlazasH) -> no para un viajero normal.
+                x.available = !t.optBoolean("completo", true)
+                        && hasFare
+                        && !blockedReason
+                        && !t.optBoolean("soloPlazaH", false)
+                        && hasNormalFare;
                 JSONArray legs=t.optJSONArray("trayectos");
                 if (legs != null && legs.length()>0) {
                     JSONObject leg=legs.optJSONObject(0);
