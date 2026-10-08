@@ -31,7 +31,7 @@ public class MainActivity extends android.app.Activity {
         root.setPadding(32,32,32,24);
 
         TextView title = new TextView(this);
-        title.setText("BUSCADOR RENFE");
+        title.setText("BUSCADOR RENFE — v42");
         title.setTextSize(26);
         title.setPadding(0,0,0,16);
         root.addView(title);
