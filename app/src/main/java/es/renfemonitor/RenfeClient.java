@@ -201,7 +201,7 @@ public class RenfeClient {
             else if(c==','){keyPos=!stack.isEmpty()&&stack.peek()=='{';b.append(c);}
             else if(keyPos && (Character.isLetter(c)||c=='_'||c=='$')){
                 int j=i+1; while(j<s.length() && (Character.isLetterOrDigit(s.charAt(j))||s.charAt(j)=='_'||s.charAt(j)=='$'))j++;
-                b.append('\\"').append(s,i,j).append('\\"'); i=j-1; keyPos=false;
+                b.append('"').append(s,i,j).append('"'); i=j-1; keyPos=false;
             } else {b.append(c); if(!Character.isWhitespace(c)) keyPos=false;}
         }
         return b.toString();
@@ -257,7 +257,7 @@ public class RenfeClient {
     static String read(InputStream in,Charset cs)throws Exception{
         try(BufferedReader r=new BufferedReader(new InputStreamReader(in,cs))){
             StringBuilder b=new StringBuilder(); String l;
-            while((l=r.readLine())!=null)b.append(l).append('\\n');
+            while((l=r.readLine())!=null)b.append(l).append('\n');
             return b.toString();
         }
     }
