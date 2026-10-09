@@ -225,7 +225,7 @@ public class MainActivity extends Activity {
         start.setOnClickListener(v -> startMonitor());
         stop.setOnClickListener(v -> stopMonitor());
 
-        TextView foot = text("Renfe Monitor · v3.0", 11, Color.rgb(135, 126, 149), Typeface.NORMAL);
+        TextView foot = text("Renfe Monitor · v3.1", 11, Color.rgb(135, 126, 149), Typeface.NORMAL);
         foot.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams footLp = new LinearLayout.LayoutParams(-1, -2);
         footLp.topMargin = dp(16);
@@ -349,7 +349,7 @@ public class MainActivity extends Activity {
 
         root.addView(historyCard, cardParams());
 
-        TextView foot = text("Renfe Monitor · v3.0", 11, Color.rgb(135, 126, 149), Typeface.NORMAL);
+        TextView foot = text("Renfe Monitor · v3.1", 11, Color.rgb(135, 126, 149), Typeface.NORMAL);
         foot.setGravity(Gravity.CENTER);
         root.addView(foot);
 
