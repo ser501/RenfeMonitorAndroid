@@ -160,7 +160,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams intervalBoxLp = new LinearLayout.LayoutParams(-1, -2);
         intervalBoxLp.topMargin = dp(12);
         searchCard.addView(intervalBox, intervalBoxLp);
-        TextView info = text("Solo trenes directos con tarifa normal disponible.", 12, MUTED, Typeface.NORMAL);
+        TextView info = text("El selector incluye trenes directos y con enlace. La alerta automática mantiene la detección de trenes directos.", 12, MUTED, Typeface.NORMAL);
         LinearLayout.LayoutParams infoLp = new LinearLayout.LayoutParams(-1, -2);
         infoLp.topMargin = dp(10);
         searchCard.addView(info, infoLp);
@@ -225,7 +225,7 @@ public class MainActivity extends Activity {
         start.setOnClickListener(v -> startMonitor());
         stop.setOnClickListener(v -> stopMonitor());
 
-        TextView foot = text("Renfe Monitor · v3.1", 11, Color.rgb(135, 126, 149), Typeface.NORMAL);
+        TextView foot = text("Renfe Monitor · v3.2", 11, Color.rgb(135, 126, 149), Typeface.NORMAL);
         foot.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams footLp = new LinearLayout.LayoutParams(-1, -2);
         footLp.topMargin = dp(16);
@@ -349,7 +349,7 @@ public class MainActivity extends Activity {
 
         root.addView(historyCard, cardParams());
 
-        TextView foot = text("Renfe Monitor · v3.1", 11, Color.rgb(135, 126, 149), Typeface.NORMAL);
+        TextView foot = text("Renfe Monitor · v3.2", 11, Color.rgb(135, 126, 149), Typeface.NORMAL);
         foot.setGravity(Gravity.CENTER);
         root.addView(foot);
 
