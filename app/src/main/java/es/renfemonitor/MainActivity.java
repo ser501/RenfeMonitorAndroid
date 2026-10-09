@@ -2,6 +2,7 @@ package es.renfemonitor;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.DatePickerDialog;
 import android.content.*;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -33,13 +34,15 @@ public class MainActivity extends Activity {
     private static final String SEARCHES = "saved_searches";
     private static final String HISTORY = "search_history";
 
-    AutoCompleteTextView origin, destination;
-    EditText date, time, interval;
+    AutoCompleteTextView origin, destination, time;
+    EditText date, interval;
+    Spinner intervalUnit;
     TextView status, metrics, statusDot;
     RenfeClient.StationList stationList;
+    int scheduleRequest = 0;
 
     String pendingOriginCode, pendingDestinationCode;
-    String pendingDate, pendingTime;
+    String pendingDate, pendingTime, pendingIntervalUnit;
     Integer pendingInterval;
 
     @Override public void onCreate(Bundle b) {
@@ -117,23 +120,51 @@ public class MainActivity extends Activity {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
 
-        LinearLayout dateBox = smallBox("FECHA");
-        date = edit(defaultDate(), InputType.TYPE_CLASS_DATETIME);
+        LinearLayout dateBox = smallBox("FECHA DEL VIAJE");
+        date = edit(defaultDate(), InputType.TYPE_NULL);
+        date.setFocusable(false);
+        date.setClickable(true);
+        date.setOnClickListener(v -> openDatePicker());
         dateBox.addView(date, fieldParams());
-        row.addView(dateBox, weightParams());
+        row.addView(dateBox, new LinearLayout.LayoutParams(0, -2, 1f));
 
-        LinearLayout timeBox = smallBox("HORA");
-        timeBox.setPadding(dp(7), 0, dp(7), 0);
-        time = edit("17:40", InputType.TYPE_CLASS_DATETIME | InputType.TYPE_DATETIME_VARIATION_TIME);
+        LinearLayout timeBox = smallBox("HORA DE SALIDA");
+        timeBox.setPadding(dp(8), 0, 0, 0);
+        time = stationField("Selecciona horario");
+        time.setText("17:40", false);
+        time.setOnClickListener(v -> {
+            if (time.getAdapter() == null || time.getAdapter().getCount() == 0) {
+                loadDepartureTimes();
+            } else {
+                time.showDropDown();
+            }
+        });
+        time.setOnItemClickListener((parent, view, position, id) -> {
+            String label = String.valueOf(parent.getItemAtPosition(position));
+            String departure = extractTime(label);
+            if (!departure.isEmpty()) time.setText(departure, false);
+        });
         timeBox.addView(time, fieldParams());
-        row.addView(timeBox, weightParams());
-
-        LinearLayout intervalBox = smallBox("CADA");
-        interval = edit("20 s", InputType.TYPE_CLASS_NUMBER);
-        intervalBox.addView(interval, fieldParams());
-        row.addView(intervalBox, weightParams());
+        row.addView(timeBox, new LinearLayout.LayoutParams(0, -2, 1f));
 
         searchCard.addView(row);
+
+        LinearLayout intervalBox = smallBox("REVISAR CADA");
+        LinearLayout intervalRow = new LinearLayout(this);
+        intervalRow.setOrientation(LinearLayout.HORIZONTAL);
+        interval = edit("20", InputType.TYPE_CLASS_NUMBER);
+        intervalRow.addView(interval, new LinearLayout.LayoutParams(0, dp(50), 1f));
+
+        intervalUnit = new Spinner(this);
+        intervalUnit.setAdapter(intervalUnitAdapter());
+        intervalUnit.setBackground(round(FIELD, BORDER, 14));
+        LinearLayout.LayoutParams unitLp = new LinearLayout.LayoutParams(dp(132), dp(50));
+        unitLp.leftMargin = dp(10);
+        intervalRow.addView(intervalUnit, unitLp);
+        intervalBox.addView(intervalRow, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams intervalBoxLp = new LinearLayout.LayoutParams(-1, -2);
+        intervalBoxLp.topMargin = dp(12);
+        searchCard.addView(intervalBox, intervalBoxLp);
         TextView info = text("Solo trenes directos con tarifa normal disponible.", 12, MUTED, Typeface.NORMAL);
         LinearLayout.LayoutParams infoLp = new LinearLayout.LayoutParams(-1, -2);
         infoLp.topMargin = dp(10);
@@ -209,8 +240,11 @@ public class MainActivity extends Activity {
         setContentView(scroll);
 
         if (pendingDate != null && date != null) date.setText(pendingDate);
-        if (pendingTime != null && time != null) time.setText(pendingTime);
-        if (pendingInterval != null && interval != null) interval.setText(pendingInterval + " s");
+        if (pendingTime != null && time != null) time.setText(pendingTime, false);
+        if (pendingInterval != null && interval != null) interval.setText(String.valueOf(pendingInterval));
+        if (pendingIntervalUnit != null && intervalUnit != null) {
+            intervalUnit.setSelection("minutos".equalsIgnoreCase(pendingIntervalUnit) ? 1 : 0);
+        }
     }
 
     void showSavedScreen() {
@@ -252,7 +286,7 @@ public class MainActivity extends Activity {
                 String route = o.optString("originName", "Origen") + " → " + o.optString("destName", "Destino");
                 item.addView(text(route, 15, WHITE, Typeface.BOLD));
                 item.addView(text(o.optString("date", "--") + " · " + o.optString("time", "--") +
-                        " · cada " + o.optInt("interval", 20) + " s", 12, MUTED, Typeface.NORMAL));
+                        " · cada " + formatInterval(o), 12, MUTED, Typeface.NORMAL));
 
                 String key = o.optString("key", "");
                 boolean active = isCurrentSearchActive(key);
@@ -334,6 +368,7 @@ public class MainActivity extends Activity {
         pendingDate = o.optString("date", defaultDate());
         pendingTime = o.optString("time", "17:40");
         pendingInterval = o.optInt("interval", 20);
+        pendingIntervalUnit = o.optString("intervalUnit", "segundos");
         showMainScreen();
     }
 
@@ -359,7 +394,8 @@ public class MainActivity extends Activity {
                 .putString(SEARCHES, out.toString()).apply();
     }
 
-    void upsertSavedSearch(String on, String oc, String dn, String dc, String ds, String ts, int sec) {
+    void upsertSavedSearch(String on, String oc, String dn, String dc, String ds, String ts,
+                           int intervalValue, String unit, int sec) {
         JSONArray src = getJsonArray(SEARCHES);
         JSONArray out = new JSONArray();
         String key = oc + "|" + dc + "|" + ds + "|" + ts;
@@ -373,7 +409,9 @@ public class MainActivity extends Activity {
             item.put("destCode", dc);
             item.put("date", ds);
             item.put("time", ts);
-            item.put("interval", sec);
+            item.put("interval", intervalValue);
+            item.put("intervalUnit", unit);
+            item.put("intervalSeconds", sec);
             item.put("updated", System.currentTimeMillis());
 
             out.put(item);
@@ -467,6 +505,138 @@ public class MainActivity extends Activity {
         metrics.setTextColor(MUTED);
     }
 
+    void openDatePicker() {
+        Calendar cal = Calendar.getInstance();
+        try {
+            SimpleDateFormat f = new SimpleDateFormat("dd/MM/yyyy", Locale.ROOT);
+            f.setLenient(false);
+            Date current = f.parse(date.getText().toString().trim());
+            if (current != null) cal.setTime(current);
+        } catch (Exception ignored) {}
+
+        DatePickerDialog dialog = new DatePickerDialog(this, (picker, year, month, day) -> {
+            date.setText(String.format(Locale.ROOT, "%02d/%02d/%04d", day, month + 1, year));
+            loadDepartureTimes();
+        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH));
+        dialog.setTitle("Fecha del viaje");
+        dialog.show();
+    }
+
+    ArrayAdapter<String> intervalUnitAdapter() {
+        String[] units = {"segundos", "minutos"};
+        return new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, units) {
+            TextView style(TextView v) {
+                v.setTextColor(WHITE);
+                v.setTextSize(13);
+                v.setPadding(dp(10), dp(8), dp(8), dp(8));
+                v.setTypeface(Typeface.create("sans", Typeface.NORMAL));
+                return v;
+            }
+
+            @Override public View getView(int position, View convertView, android.view.ViewGroup parent) {
+                TextView v = (TextView) super.getView(position, convertView, parent);
+                return style(v);
+            }
+
+            @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parent) {
+                TextView v = (TextView) super.getDropDownView(position, convertView, parent);
+                style(v);
+                v.setBackgroundColor(CARD);
+                return v;
+            }
+        };
+    }
+
+    String formatInterval(JSONObject o) {
+        String unit = o.optString("intervalUnit", "segundos");
+        int value = o.optInt("interval", 20);
+        if (!o.has("intervalUnit")) unit = "segundos"; // búsqueda guardada en una versión anterior
+        return value + " " + unit;
+    }
+
+    String extractTime(String text) {
+        if (text == null) return "";
+        String value = text.trim();
+        if (value.length() >= 5 && value.substring(0, 5).matches("\\d{2}:\\d{2}")) {
+            return value.substring(0, 5);
+        }
+        return value;
+    }
+
+    void loadDepartureTimes() {
+        if (origin == null || destination == null || date == null || time == null || metrics == null) return;
+        String originLabel = origin.getText().toString().trim();
+        String destinationLabel = destination.getText().toString().trim();
+        String oc = codeFromLabel(originLabel);
+        String dc = codeFromLabel(destinationLabel);
+        String ds = date.getText().toString().trim();
+        if (oc == null || dc == null || oc.equals(dc)) return;
+        try {
+            validateDate(ds);
+        } catch (Exception e) {
+            return;
+        }
+
+        final int request = ++scheduleRequest;
+        metrics.setText("Consultando horarios reales de Renfe…");
+        new Thread(() -> {
+            try {
+                ArrayList<RenfeClient.Journey> journeys = RenfeClient.getDepartures(
+                        labelName(originLabel), oc, labelName(destinationLabel), dc, ds);
+                Collections.sort(journeys, Comparator.comparing(j -> j.departure == null ? "" : j.departure));
+
+                ArrayList<String> labels = new ArrayList<>();
+                HashSet<String> seen = new HashSet<>();
+                for (RenfeClient.Journey j : journeys) {
+                    if (j.departure == null || j.departure.trim().isEmpty()) continue;
+                    String label = j.departure + " · llega " + safeText(j.arrival)
+                            + (j.type == null || j.type.isEmpty() ? "" : " · " + j.type)
+                            + (j.train == null || j.train.isEmpty() ? "" : " · tren " + j.train);
+                    // Conserva servicios distintos aunque compartan hora de salida.
+                    if (seen.add(label)) labels.add(label);
+                }
+
+                runOnUiThread(() -> {
+                    if (request != scheduleRequest || isFinishing()) return;
+                    ArrayAdapter<String> adapter = new ArrayAdapter<String>(
+                            this, android.R.layout.simple_list_item_1, labels) {
+                        @Override public View getView(int position, View convertView, android.view.ViewGroup parent) {
+                            TextView v = (TextView) super.getView(position, convertView, parent);
+                            styleStation(v);
+                            return v;
+                        }
+                        @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parent) {
+                            TextView v = (TextView) super.getDropDownView(position, convertView, parent);
+                            styleStation(v);
+                            return v;
+                        }
+                    };
+                    time.setAdapter(adapter);
+                    if (labels.isEmpty()) {
+                        metrics.setText("Renfe no devolvió salidas directas para esa fecha y trayecto.");
+                    } else {
+                        metrics.setText("Horarios reales: " + labels.size() + " salidas directas. Pulsa HORA DE SALIDA para elegir.");
+                    }
+                    refreshMonitorStateIfMonitoring();
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (request != scheduleRequest || isFinishing()) return;
+                    metrics.setText("No se pudieron consultar los horarios de Renfe.");
+                });
+            }
+        }, "RenfeDepartures").start();
+    }
+
+    String safeText(String value) {
+        return value == null ? "" : value;
+    }
+
+    void refreshMonitorStateIfMonitoring() {
+        android.content.SharedPreferences p = getSharedPreferences(PREFS, MODE_PRIVATE);
+        if (p.getBoolean("active", false) || p.getBoolean("found", false)) refreshMonitorState();
+    }
+
     void loadStations() {
         new Thread(() -> {
             try {
@@ -502,13 +672,18 @@ public class MainActivity extends Activity {
                         pendingDate = null;
                         pendingTime = null;
                         pendingInterval = null;
+                        pendingIntervalUnit = null;
                     } else if (!stationList.items.isEmpty()) {
                         origin.setText(findDefault("ALCAZAR"), false);
                         destination.setText(findDefault("ALICANTE"), false);
                     }
 
+                    origin.setOnItemClickListener((parent, view, position, id) -> loadDepartureTimes());
+                    destination.setOnItemClickListener((parent, view, position, id) -> loadDepartureTimes());
+
                     status.setText("Listo · " + stationList.items.size() + " estaciones");
                     refreshMonitorState();
+                    loadDepartureTimes();
                 });
             } catch (Exception e) {
                 runOnUiThread(() -> {
@@ -561,12 +736,27 @@ public class MainActivity extends Activity {
             }
 
             String ds = date.getText().toString().trim();
-            String ts = time.getText().toString().trim();
+            String ts = extractTime(time.getText().toString().trim());
             validateDate(ds);
             validateTime(ts);
-            int sec = Math.max(10, Integer.parseInt(interval.getText().toString().replace("s", "").trim()));
 
-            upsertSavedSearch(labelName(o), oc, labelName(d), dc, ds, ts, sec);
+            int intervalValue = Integer.parseInt(interval.getText().toString().trim());
+            if (intervalValue <= 0) {
+                status.setText("El intervalo debe ser mayor que cero.");
+                return;
+            }
+            String unit = intervalUnit.getSelectedItemPosition() == 1 ? "minutos" : "segundos";
+            long calculated = (long) intervalValue * ("minutos".equals(unit) ? 60L : 1L);
+            if (calculated > 86400L) {
+                status.setText("El intervalo máximo permitido es de 24 horas.");
+                return;
+            }
+            int sec = (int) Math.max(10L, calculated);
+            if (calculated < 10L) {
+                Toast.makeText(this, "El intervalo mínimo es de 10 segundos.", Toast.LENGTH_LONG).show();
+            }
+
+            upsertSavedSearch(labelName(o), oc, labelName(d), dc, ds, ts, intervalValue, unit, sec);
 
             Intent i = new Intent(this, MonitorService.class);
             i.putExtra("originName", labelName(o));
