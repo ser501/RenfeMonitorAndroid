@@ -604,16 +604,33 @@ public class MainActivity extends Activity {
                 Collections.sort(journeys, Comparator.comparing(j -> j.departure == null ? "" : j.departure));
 
                 ArrayList<String> labels = new ArrayList<>();
+                int directCount = 0;
+                int connectionCount = 0;
                 HashSet<String> seen = new HashSet<>();
                 for (RenfeClient.Journey j : journeys) {
                     if (j.departure == null || j.departure.trim().isEmpty()) continue;
+                    String routeKind;
+                    if (j.direct) {
+                        routeKind = "DIRECTO";
+                    } else if (j.transferCount > 0) {
+                        routeKind = j.transferCount == 1 ? "1 ENLACE" : j.transferCount + " ENLACES";
+                    } else {
+                        routeKind = "CON ENLACE";
+                    }
                     String label = j.departure + " · llega " + safeText(j.arrival)
+                            + " · " + routeKind
                             + (j.type == null || j.type.isEmpty() ? "" : " · " + j.type)
-                            + (j.train == null || j.train.isEmpty() ? "" : " · tren " + j.train);
+                            + (j.train == null || j.train.isEmpty() ? "" : " · trenes " + j.train);
                     // Conserva servicios distintos aunque compartan hora de salida.
-                    if (seen.add(label)) labels.add(label);
+                    if (seen.add(label)) {
+                        labels.add(label);
+                        if (j.direct) directCount++;
+                        else connectionCount++;
+                    }
                 }
 
+                final int directTotal = directCount;
+                final int connectionTotal = connectionCount;
                 runOnUiThread(() -> {
                     if (request != scheduleRequest || isFinishing()) return;
                     ArrayAdapter<String> adapter = new ArrayAdapter<String>(
@@ -632,9 +649,10 @@ public class MainActivity extends Activity {
                     time.setAdapter(adapter);
                     departureLabels = new ArrayList<>(labels);
                     if (labels.isEmpty()) {
-                        metrics.setText("Renfe no devolvió salidas directas para esa fecha y trayecto.");
+                        metrics.setText("Renfe no devolvió horarios para esa fecha y trayecto, ni directos ni con enlace.");
                     } else {
-                        metrics.setText("Horarios reales: " + labels.size() + " salidas directas. Pulsa HORA DE SALIDA para elegir.");
+                        metrics.setText("Horarios reales: " + directTotal + " directos · " +
+                                connectionTotal + " con enlace. Pulsa HORA DE SALIDA para elegir.");
                     }
                     refreshMonitorStateIfMonitoring();
                 });
