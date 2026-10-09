@@ -13,6 +13,7 @@
         android:roundIcon="@drawable/ic_launcher_app"
         android:allowBackup="true"
         android:supportsRtl="true">
+        <activity android:name=".RenfeBookingActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
