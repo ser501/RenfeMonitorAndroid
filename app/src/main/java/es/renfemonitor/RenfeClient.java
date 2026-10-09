@@ -27,6 +27,7 @@ public class RenfeClient {
     static class Journey {
         String departure, arrival, duration, type, train, from, to;
         boolean available, direct;
+        int transferCount;
         double price;
         String toStringLine() {
             String p = price > 0 ? String.format(Locale.US, "%.2f €", price) : "sin precio";
@@ -88,10 +89,17 @@ public class RenfeClient {
     // Devuelve los horarios directos publicados por Renfe para una ruta y fecha.
     // No exige que haya plaza ahora: el monitor puede vigilar que se libere después.
     static ArrayList<Journey> getDepartures(String on, String oc, String dn, String dc, String date) throws Exception {
-        return search(on, oc, dn, dc, date, "");
+        // En la selección de horarios incluimos directos y también itinerarios con enlace.
+        return query(on, oc, dn, dc, date, "", true);
     }
 
     static ArrayList<Journey> search(String on, String oc, String dn, String dc, String date, String target) throws Exception {
+        // El monitor conserva la búsqueda de trenes directos, que es su comportamiento actual.
+        return query(on, oc, dn, dc, date, target, false);
+    }
+
+    static ArrayList<Journey> query(String on, String oc, String dn, String dc,
+                                    String date, String target, boolean includeConnections) throws Exception {
         CookieManager cm = new CookieManager();
         CookieHandler.setDefault(cm);
 
@@ -108,7 +116,7 @@ public class RenfeClient {
         f.put("FechaIdaSel",d); f.put("FechaVueltaSel","");
         f.put("_fechaIdaVisual",d); f.put("_fechaVueltaVisual","");
         f.put("adultos_","1"); f.put("ninos_","0"); f.put("ninosMenores","0");
-        f.put("codPromocional",""); f.put("plazaH","false"); f.put("sinEnlace","true");
+        f.put("codPromocional",""); f.put("plazaH","false"); f.put("sinEnlace", includeConnections ? "false" : "true");
         f.put("conMascota","false"); f.put("conBicicleta","false"); f.put("asistencia","false");
         f.put("franjaHoraI",""); f.put("franjaHoraV","");
         f.put("Idioma","es"); f.put("Pais","ES");
@@ -123,7 +131,7 @@ public class RenfeClient {
             "callCount=1\nwindowName=\nc0-scriptName=trainEnlacesManager\n" +
             "c0-methodName=getTrainsList\nc0-id=0\n" +
             "c0-param0=Object_Object:{atendo:reference:c0-e1, sinEnlace:reference:c0-e2, plazaH:reference:c0-e3, tipoFranjaI:reference:c0-e4, tipoFranjaV:reference:c0-e5, horaFranjaIda:reference:c0-e6, horaFranjaVuelta:reference:c0-e7, fechaSalida:reference:c0-e8, fechaVuelta:reference:c0-e9, adultos:reference:c0-e10, ninos:reference:c0-e11, ninosMenores:reference:c0-e12, trayecto:reference:c0-e13, idaVuelta:reference:c0-e14, conMascota:reference:c0-e15, conBicicleta:reference:c0-e16}\n" +
-            "c0-e1=string:false\nc0-e2=string:true\nc0-e3=string:false\nc0-e4=string:\nc0-e5=string:\nc0-e6=string:\nc0-e7=string:\n" +
+            "c0-e1=string:false\nc0-e2=string:" + (includeConnections ? "false" : "true") + "\nc0-e3=string:false\nc0-e4=string:\nc0-e5=string:\nc0-e6=string:\nc0-e7=string:\n" +
             "c0-e8=string:" + esc(d) + "\nc0-e9=string:\nc0-e10=string:1\nc0-e11=string:0\nc0-e12=string:0\nc0-e13=string:I\nc0-e14=string:\nc0-e15=string:false\nc0-e16=string:false\n" +
             "batchId=0\ninstanceId=0\npage=" + esc(PAGE) + "\nscriptSessionId=" + sid + "\n";
 
@@ -196,12 +204,20 @@ public class RenfeClient {
                         && hasNormalFare;
                 JSONArray legs=t.optJSONArray("trayectos");
                 if (legs != null && legs.length()>0) {
-                    JSONObject leg=legs.optJSONObject(0);
-                    if (leg != null) x.train=stripZeros(leg.optString("cdgoTren",""));
+                    x.transferCount = Math.max(0, legs.length() - 1);
+                    ArrayList<String> trainCodes = new ArrayList<>();
+                    for (int k = 0; k < legs.length(); k++) {
+                        JSONObject leg = legs.optJSONObject(k);
+                        if (leg == null) continue;
+                        String trainCode = stripZeros(leg.optString("cdgoTren",""));
+                        if (!trainCode.isEmpty() && !trainCodes.contains(trainCode)) trainCodes.add(trainCode);
+                    }
+                    x.train = String.join(" + ", trainCodes);
                 }
                 if (x.train == null || x.train.isEmpty()) x.train = t.optString("cdgoTren","");
                 if (target == null || target.trim().isEmpty()) {
-                    if (x.direct) out.add(x);
+                    // La consulta de horarios permite elegir también itinerarios con enlace.
+                    out.add(x);
                 } else if (x.departure.equals(target) && x.available && x.direct) {
                     out.add(x);
                 }
