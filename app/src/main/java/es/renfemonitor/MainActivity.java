@@ -132,7 +132,7 @@ public class MainActivity extends Activity {
         LinearLayout timeBox = smallBox("HORA DE SALIDA");
         timeBox.setPadding(dp(8), 0, 0, 0);
         time = stationField("Selecciona horario");
-        time.setText("17:40", false);
+        time.setText("", false);
         time.setFocusable(false);
         time.setClickable(true);
         time.setOnClickListener(v -> {
@@ -757,6 +757,10 @@ public class MainActivity extends Activity {
             String ds = date.getText().toString().trim();
             String ts = extractTime(time.getText().toString().trim());
             validateDate(ds);
+            if (ts.isEmpty()) {
+                status.setText("Selecciona una hora en los horarios reales de Renfe.");
+                return;
+            }
             validateTime(ts);
 
             int intervalValue = Integer.parseInt(interval.getText().toString().trim());
