@@ -81,7 +81,7 @@ public class RenfeClient {
         // La app presenta los nombres sin tildes para evitar problemas visuales.
         String normalized = Normalizer.normalize(restored, Normalizer.Form.NFD)
             .replaceAll("\\p{M}+", "")
-            .replace("\\uFFFD", "");
+            .replace("�", "");
         return normalized.trim();
     }
 
