@@ -62,7 +62,15 @@ public class RenfeClient {
 
     static String clean(String s) {
         if (s == null) return "";
-        String normalized = s
+        // Si una respuesta antigua sustituyó la Á por el carácter de
+        // reemplazo, recuperamos el nombre conocido antes de limpiar marcas.
+        String restored = s
+            .replace("ALC�ZAR", "ALCAZAR")
+            .replace("Alc�zar", "Alcazar")
+            .replace("alc�zar", "alcazar")
+            .replace("ALC?ZAR", "ALCAZAR")
+            .replace("Alc?zar", "Alcazar")
+            .replace("alc?zar", "alcazar")
             .replace("\\u00c1","Á").replace("\\u00e1","á")
             .replace("\\u00c9","É").replace("\\u00e9","é")
             .replace("\\u00cd","Í").replace("\\u00ed","í")
@@ -70,13 +78,17 @@ public class RenfeClient {
             .replace("\\u00da","Ú").replace("\\u00fa","ú")
             .replace("\\u00d1","Ñ").replace("\\u00f1","ñ");
 
-        // Las estaciones se muestran sin tildes para evitar problemas de
-        // codificación en nombres como "ALCÁZAR DE SAN JUAN".
-        normalized = Normalizer.normalize(normalized, Normalizer.Form.NFD)
+        // La app presenta los nombres sin tildes para evitar problemas visuales.
+        String normalized = Normalizer.normalize(restored, Normalizer.Form.NFD)
             .replaceAll("\\p{M}+", "")
-            .replace("�", "");
-
+            .replace("\\uFFFD", "");
         return normalized.trim();
+    }
+
+    // Devuelve los horarios directos publicados por Renfe para una ruta y fecha.
+    // No exige que haya plaza ahora: el monitor puede vigilar que se libere después.
+    static ArrayList<Journey> getDepartures(String on, String oc, String dn, String dc, String date) throws Exception {
+        return search(on, oc, dn, dc, date, "");
     }
 
     static ArrayList<Journey> search(String on, String oc, String dn, String dc, String date, String target) throws Exception {
@@ -187,8 +199,12 @@ public class RenfeClient {
                     JSONObject leg=legs.optJSONObject(0);
                     if (leg != null) x.train=stripZeros(leg.optString("cdgoTren",""));
                 }
-                if (x.train.isEmpty()) x.train = t.optString("cdgoTren","");
-                if (x.departure.equals(target) && x.available && x.direct) out.add(x);
+                if (x.train == null || x.train.isEmpty()) x.train = t.optString("cdgoTren","");
+                if (target == null || target.trim().isEmpty()) {
+                    if (x.direct) out.add(x);
+                } else if (x.departure.equals(target) && x.available && x.direct) {
+                    out.add(x);
+                }
             }
         }
         return out;
@@ -310,10 +326,37 @@ public class RenfeClient {
         if(in==null)throw new IOException("HTTP "+code);
         Charset cs=StandardCharsets.UTF_8;
         String ct=c.getContentType();
-        if(ct!=null && ct.toLowerCase(Locale.ROOT).contains("iso-8859-1")) cs=StandardCharsets.ISO_8859_1;
-        String text=read(in,cs);
+        if(ct!=null && (ct.toLowerCase(Locale.ROOT).contains("iso-8859-1")
+                || ct.toLowerCase(Locale.ROOT).contains("windows-1252"))) {
+            cs=Charset.forName("windows-1252");
+        }
+        byte[] data = readBytes(in);
+        String text = new String(data, cs);
+        // Algunas respuestas del catálogo llegan en Windows-1252 aunque no
+        // anuncien charset; UTF-8 las convierte en U+FFFD y hace desaparecer letras.
+        if (text.indexOf('\uFFFD') >= 0 && !containsUtf8Replacement(data)) {
+            String legacy = new String(data, Charset.forName("windows-1252"));
+            if (legacy.indexOf('\uFFFD') < 0) text = legacy;
+        }
         if(code>=400)throw new IOException("HTTP "+code+" "+text.substring(0,Math.min(300,text.length())));
         return text;
+    }
+
+    static boolean containsUtf8Replacement(byte[] data) {
+        for (int i = 0; i + 2 < data.length; i++) {
+            if ((data[i] & 0xff) == 0xef && (data[i + 1] & 0xff) == 0xbf
+                    && (data[i + 2] & 0xff) == 0xbd) return true;
+        }
+        return false;
+    }
+
+    static byte[] readBytes(InputStream in) throws Exception {
+        try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int n;
+            while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
+            return out.toByteArray();
+        }
     }
 
     static String read(InputStream in,Charset cs)throws Exception{
