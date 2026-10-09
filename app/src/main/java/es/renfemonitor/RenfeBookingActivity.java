@@ -64,7 +64,7 @@ public class RenfeBookingActivity extends Activity {
             @Override public void onPageFinished(WebView view, String url) {
                 progress.setIndeterminate(false);
                 progress.setVisibility(View.GONE);
-                if (!submitted && url != null && url.contains("venta.renfe.com/vol/inicio.do")) {
+                if (!submitted) {
                     submitted = true;
                     progress.setVisibility(View.VISIBLE);
                     progress.setIndeterminate(true);
