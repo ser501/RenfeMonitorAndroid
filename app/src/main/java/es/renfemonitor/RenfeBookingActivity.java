@@ -64,8 +64,12 @@ public class RenfeBookingActivity extends Activity {
             @Override public void onPageFinished(WebView view, String url) {
                 progress.setIndeterminate(false);
                 progress.setVisibility(View.GONE);
-                // La web de venta puede redirigir a la portada si Renfe cambia
-                // su flujo. No reenvíes el formulario automáticamente.
+                if (!submitted && url != null && url.contains("venta.renfe.com/vol/inicio.do")) {
+                    submitted = true;
+                    progress.setVisibility(View.VISIBLE);
+                    progress.setIndeterminate(true);
+                    submitSearch();
+                }
             }
         });
 
@@ -75,19 +79,6 @@ public class RenfeBookingActivity extends Activity {
         setContentView(root);
 
         web.loadUrl(BASE + "/vol/inicio.do");
-    }
-
-    @Override protected void onResume() {
-        super.onResume();
-        if (web != null && !submitted) {
-            web.postVisualStateCallback(1, new WebView.VisualStateCallback() {
-                @Override public void onComplete(long requestId) {
-                    if (submitted || isFinishing()) return;
-                    submitted = true;
-                    submitSearch();
-                }
-            });
-        }
     }
 
     private void submitSearch() {
