@@ -40,6 +40,7 @@ public class MainActivity extends Activity {
     TextView status, metrics, statusDot;
     RenfeClient.StationList stationList;
     int scheduleRequest = 0;
+    ArrayList<String> departureLabels = new ArrayList<>();
 
     String pendingOriginCode, pendingDestinationCode;
     String pendingDate, pendingTime, pendingIntervalUnit;
@@ -132,17 +133,11 @@ public class MainActivity extends Activity {
         timeBox.setPadding(dp(8), 0, 0, 0);
         time = stationField("Selecciona horario");
         time.setText("17:40", false);
+        time.setFocusable(false);
+        time.setClickable(true);
         time.setOnClickListener(v -> {
-            if (time.getAdapter() == null || time.getAdapter().getCount() == 0) {
-                loadDepartureTimes();
-            } else {
-                time.showDropDown();
-            }
-        });
-        time.setOnItemClickListener((parent, view, position, id) -> {
-            String label = String.valueOf(parent.getItemAtPosition(position));
-            String departure = extractTime(label);
-            if (!departure.isEmpty()) time.setText(departure, false);
+            if (departureLabels.isEmpty()) loadDepartureTimes();
+            else showDepartureChooser();
         });
         timeBox.addView(time, fieldParams());
         row.addView(timeBox, new LinearLayout.LayoutParams(0, -2, 1f));
@@ -516,7 +511,7 @@ public class MainActivity extends Activity {
 
         DatePickerDialog dialog = new DatePickerDialog(this, (picker, year, month, day) -> {
             date.setText(String.format(Locale.ROOT, "%02d/%02d/%04d", day, month + 1, year));
-            loadDepartureTimes();
+            loadDepartureTimes(true);
         }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH));
         dialog.setTitle("Fecha del viaje");
         dialog.show();
@@ -563,7 +558,28 @@ public class MainActivity extends Activity {
         return value;
     }
 
+    void showDepartureChooser() {
+        if (departureLabels == null || departureLabels.isEmpty()) {
+            Toast.makeText(this, "No hay horarios cargados para ese trayecto y fecha.", Toast.LENGTH_LONG).show();
+            loadDepartureTimes();
+            return;
+        }
+        String[] options = departureLabels.toArray(new String[0]);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Horarios reales de Renfe")
+                .setItems(options, (dialog, which) -> {
+                    String departure = extractTime(options[which]);
+                    if (!departure.isEmpty()) time.setText(departure, false);
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
+    }
+
     void loadDepartureTimes() {
+        loadDepartureTimes(false);
+    }
+
+    void loadDepartureTimes(boolean clearSelection) {
         if (origin == null || destination == null || date == null || time == null || metrics == null) return;
         String originLabel = origin.getText().toString().trim();
         String destinationLabel = destination.getText().toString().trim();
@@ -578,6 +594,8 @@ public class MainActivity extends Activity {
         }
 
         final int request = ++scheduleRequest;
+        departureLabels = new ArrayList<>();
+        if (clearSelection) time.setText("", false);
         metrics.setText("Consultando horarios reales de Renfe…");
         new Thread(() -> {
             try {
@@ -612,6 +630,7 @@ public class MainActivity extends Activity {
                         }
                     };
                     time.setAdapter(adapter);
+                    departureLabels = new ArrayList<>(labels);
                     if (labels.isEmpty()) {
                         metrics.setText("Renfe no devolvió salidas directas para esa fecha y trayecto.");
                     } else {
@@ -678,8 +697,8 @@ public class MainActivity extends Activity {
                         destination.setText(findDefault("ALICANTE"), false);
                     }
 
-                    origin.setOnItemClickListener((parent, view, position, id) -> loadDepartureTimes());
-                    destination.setOnItemClickListener((parent, view, position, id) -> loadDepartureTimes());
+                    origin.setOnItemClickListener((parent, view, position, id) -> loadDepartureTimes(true));
+                    destination.setOnItemClickListener((parent, view, position, id) -> loadDepartureTimes(true));
 
                     status.setText("Listo · " + stationList.items.size() + " estaciones");
                     refreshMonitorState();
@@ -751,10 +770,13 @@ public class MainActivity extends Activity {
                 status.setText("El intervalo máximo permitido es de 24 horas.");
                 return;
             }
-            int sec = (int) Math.max(10L, calculated);
             if (calculated < 10L) {
+                intervalValue = 10;
+                calculated = 10L;
+                interval.setText("10");
                 Toast.makeText(this, "El intervalo mínimo es de 10 segundos.", Toast.LENGTH_LONG).show();
             }
+            int sec = (int) calculated;
 
             upsertSavedSearch(labelName(o), oc, labelName(d), dc, ds, ts, intervalValue, unit, sec);
 
