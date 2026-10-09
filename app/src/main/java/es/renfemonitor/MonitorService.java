@@ -91,7 +91,7 @@ public class MonitorService extends Service {
                                         queryCount, "ONLINE", checkedAt, "", searchKey);
 
                                 addHistory(on, dn, date, target, detail, checkedAt);
-                                showFoundNotification(on, dn, date, target, detail);
+                                showFoundNotification(on, oc, dn, dc, date, target, detail);
 
                                 nm.cancel(SEARCH_ID);
                                 stopForeground(true);
@@ -144,8 +144,16 @@ public class MonitorService extends Service {
                 .build();
     }
 
-    void showFoundNotification(String on, String dn, String date, String target, String detail) {
-        Intent in = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.renfe.com/es/es/"));
+    void showFoundNotification(String on, String oc, String dn, String dc,
+                               String date, String target, String detail) {
+        Intent in = new Intent(this, RenfeBookingActivity.class);
+        in.putExtra("originName", on);
+        in.putExtra("originCode", oc);
+        in.putExtra("destName", dn);
+        in.putExtra("destCode", dc);
+        in.putExtra("date", date);
+        in.putExtra("time", target);
+        in.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         PendingIntent pi = PendingIntent.getActivity(
                 this, FOUND_ID, in,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
