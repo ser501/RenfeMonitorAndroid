@@ -114,6 +114,10 @@ class MainActivity : ComponentActivity() {
                 mediaController = future.get()
                 mediaController?.addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
+                    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                        val activeUrl = mediaItem?.localConfiguration?.uri?.toString()
+                        currentAudio = queueItems.firstOrNull { it.url == activeUrl } ?: currentAudio
+                    }
                 })
             }
         }, MoreExecutors.directExecutor())
@@ -126,9 +130,17 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
-    fun playAudio(item: AudioItem) {
-        if (item.url.isBlank()) {
-            toast("Esta entrada no tiene un enlace de audio directo.")
+    private var queueItems: List<AudioItem> = emptyList()
+
+    fun playAudio(item: AudioItem) = playQueue(listOf(item), 0, repeatAll = false)
+
+    fun playQueue(items: List<AudioItem>, startIndex: Int = 0, repeatAll: Boolean = true) {
+        if (items.isEmpty() || startIndex !in items.indices) {
+            toast("No hay canciones disponibles para reproducir.")
+            return
+        }
+        if (items.any { it.url.isBlank() }) {
+            toast("Una canción no tiene un enlace de audio válido.")
             return
         }
         val controller = mediaController
@@ -136,10 +148,18 @@ class MainActivity : ComponentActivity() {
             toast("El reproductor aún se está iniciando. Vuelve a tocar reproducir.")
             return
         }
-        val metadata = MediaMetadata.Builder().setTitle(item.title).setArtist(item.subtitle.ifBlank { item.source }).build()
-        val mediaItem = MediaItem.Builder().setUri(Uri.parse(item.url)).setMediaMetadata(metadata).build()
-        currentAudio = item
-        controller.setMediaItem(mediaItem)
+        queueItems = items
+        val mediaItems = items.map { item ->
+            val metadata = MediaMetadata.Builder()
+                .setTitle(item.title)
+                .setArtist(item.subtitle.ifBlank { item.source })
+                .setArtworkUri(item.imageUrl.takeIf { it.startsWith("http") }?.let(Uri::parse))
+                .build()
+            MediaItem.Builder().setUri(Uri.parse(item.url)).setMediaMetadata(metadata).build()
+        }
+        currentAudio = items[startIndex]
+        controller.setMediaItems(mediaItems, startIndex, 0L)
+        controller.repeatMode = if (repeatAll) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
         controller.prepare()
         controller.play()
         isPlaying = true
@@ -148,17 +168,6 @@ class MainActivity : ComponentActivity() {
     fun togglePlayback() {
         val player = mediaController ?: return
         if (player.isPlaying) player.pause() else player.play()
-    }
-
-    fun openSpotify(search: String = "") {
-        val trimmed = search.trim()
-        val deepLink = if (trimmed.isBlank()) "spotify://" else "spotify:search:${Uri.encode(trimmed)}"
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(deepLink)))
-        } catch (_: Exception) {
-            val url = if (trimmed.isBlank()) "https://open.spotify.com/" else "https://open.spotify.com/search/${Uri.encode(trimmed)}"
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        }
     }
 
     fun saveJamendoId(value: String) {
@@ -289,7 +298,6 @@ private fun OndaLogo(accent: Color) {
 
 @Composable
 private fun HomeScreen(activity: MainActivity, accent: Color, onNavigate: (AppScreen) -> Unit, onToggleTheme: () -> Unit) {
-    var spotifyQuery by remember { mutableStateOf("") }
     PageColumn {
         OndaLogo(accent)
         Spacer(Modifier.height(2.dp))
@@ -320,29 +328,15 @@ private fun HomeScreen(activity: MainActivity, accent: Color, onNavigate: (AppSc
             QuickCard("◉", "Historias", "Pódcast", Modifier.weight(1f)) { onNavigate(AppScreen.PODCASTS) }
         }
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xFF1DB954)), contentAlignment = Alignment.Center) {
-                        Text("●", color = Color.Black, fontSize = 22.sp)
-                    }
-                    Spacer(Modifier.width(11.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Spotify", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Text("Abre Spotify oficial para su catálogo completo", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
-                    }
+            Row(Modifier.fillMaxWidth().clickable { onNavigate(AppScreen.RADIO) }.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(13.dp)) {
+                Box(Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(Brush.linearGradient(listOf(accent, Color(0xFF536B9A)))), contentAlignment = Alignment.Center) {
+                    Text("〰", color = Color(0xFF111318), fontSize = 27.sp, fontWeight = FontWeight.Black)
                 }
-                OutlinedTextField(
-                    value = spotifyQuery,
-                    onValueChange = { spotifyQuery = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    placeholder = { Text("Buscar canción, artista o pódcast") },
-                    shape = RoundedCornerShape(15.dp)
-                )
-                Button(onClick = { activity.openSpotify(spotifyQuery) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1DB954), contentColor = Color.Black)) {
-                    Text(if (spotifyQuery.isBlank()) "Abrir Spotify" else "Buscar en Spotify", fontWeight = FontWeight.Bold)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Tu radio musical", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                    Text("Crea una emisora por estilo y escucha una cola continua sin salir de OndaLibre.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 }
-                Text("Spotify se reproduce en su propia aplicación o web; OndaLibre no elimina sus anuncios ni extrae sus canciones.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("→", color = accent, fontSize = 23.sp)
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -467,38 +461,135 @@ private fun PodcastScreen(activity: MainActivity, accent: Color) {
 @Composable
 private fun RadioScreen(activity: MainActivity, accent: Color) {
     val scope = rememberCoroutineScope()
+    var clientId by remember { mutableStateOf(activity.jamendoId()) }
     var query by remember { mutableStateOf("") }
     var stations by remember { mutableStateOf(listOf<AudioItem>()) }
+    var liveStations by remember { mutableStateOf(listOf<AudioItem>()) }
     var loading by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("Cargando emisoras de España…") }
-    LaunchedEffect(Unit) {
-        if (stations.isEmpty()) {
-            loading = true
-            try { stations = MediaCatalog.searchRadioStations(""); message = "Emisoras disponibles. La señal depende de cada estación." }
-            catch (e: Exception) { message = e.message ?: "No se ha podido cargar la radio." }
-            loading = false
-        }
-    }
+    var message by remember { mutableStateOf("Crea una radio musical por estilo. La música se reproduce aquí, con la cola en bucle.") }
+    var liveQuery by remember { mutableStateOf("") }
+    val presets = listOf("Rock", "Metal", "Pop", "Electrónica", "Hip hop", "Chill", "Lo-fi", "Jazz")
     PageColumn {
         OndaLogo(accent)
-        Text("Radio en directo", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-        Text("Encuentra emisoras por nombre y escúchalas desde Internet.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        OutlinedTextField(value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Nombre de emisora") }, singleLine = true, shape = RoundedCornerShape(15.dp))
+        Text("Radio", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
+        Text("Como una radio personalizada: elige un estilo y OndaLibre prepara una sesión continua de música.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(22.dp)) {
+            Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("CREA TU RADIO", color = accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+                OutlinedTextField(
+                    value = clientId,
+                    onValueChange = { clientId = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Jamendo Client ID") },
+                    placeholder = { Text("Guarda tu ID gratuito una vez") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp)
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { activity.saveJamendoId(clientId) }, modifier = Modifier.weight(1f)) { Text("Guardar ID") }
+                    OutlinedButton(onClick = { activity.openUrl("https://developer.jamendo.com/") }) { Text("Obtener ID") }
+                }
+                Text("Estilos", fontWeight = FontWeight.SemiBold)
+                presets.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        pair.forEach { genre ->
+                            OutlinedButton(
+                                onClick = {
+                                    query = genre
+                                    scope.launch {
+                                        loading = true
+                                        message = "Preparando tu radio de $genre…"
+                                        try {
+                                            val found = MediaCatalog.searchJamendo(clientId, genre)
+                                            stations = found
+                                            if (found.isEmpty()) message = "No hay temas para $genre. Prueba otro estilo."
+                                            else {
+                                                val shuffled = found.shuffled()
+                                                activity.playQueue(shuffled, 0, repeatAll = true)
+                                                message = "Radio $genre activa: ${shuffled.size} temas en reproducción continua."
+                                            }
+                                        } catch (e: Exception) {
+                                            message = e.message ?: "No se ha podido crear la radio."
+                                        }
+                                        loading = false
+                                    }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { Text(genre) }
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("O crea una radio a partir de un artista o tema") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(14.dp)
+                )
+                Button(
+                    onClick = {
+                        scope.launch {
+                            loading = true
+                            message = "Creando tu radio…"
+                            try {
+                                val found = MediaCatalog.searchJamendo(clientId, query)
+                                stations = found
+                                if (found.isEmpty()) message = "No se han encontrado temas para esa búsqueda."
+                                else {
+                                    val shuffled = found.shuffled()
+                                    activity.playQueue(shuffled, 0, repeatAll = true)
+                                    message = "Tu radio está en marcha: ${shuffled.size} temas en reproducción continua."
+                                }
+                            } catch (e: Exception) {
+                                message = e.message ?: "No se ha podido crear la radio."
+                            }
+                            loading = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("▶ Crear y escuchar radio") }
+                if (loading) CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+                Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+            }
+        }
+
+        if (stations.isNotEmpty()) {
+            Text("EN TU RADIO", fontSize = 12.sp, color = accent, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
+            stations.forEach { AudioRow(it, activity, accent, showDownload = it.canDownload) }
+        }
+
+        Divider(color = MaterialTheme.colorScheme.surfaceVariant)
+        Text("Emisoras en directo", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text("También puedes escuchar radios FM/online reales desde el reproductor integrado.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+        OutlinedTextField(value = liveQuery, onValueChange = { liveQuery = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Nombre de emisora") }, singleLine = true, shape = RoundedCornerShape(15.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = {
                 scope.launch {
-                    loading = true; message = "Buscando emisoras…"
-                    try { stations = MediaCatalog.searchRadioStations(query); message = if (stations.isEmpty()) "No se han encontrado emisoras." else "${stations.size} emisoras disponibles." }
-                    catch (e: Exception) { message = e.message ?: "No se ha podido buscar emisoras." }
+                    loading = true
+                    try {
+                        liveStations = MediaCatalog.searchRadioStations(liveQuery)
+                        message = if (liveStations.isEmpty()) "No se han encontrado emisoras." else "${liveStations.size} emisoras disponibles."
+                    } catch (e: Exception) { message = e.message ?: "No se ha podido buscar emisoras." }
                     loading = false
                 }
             }, modifier = Modifier.weight(1f)) { Text("Buscar emisoras") }
-            OutlinedButton(onClick = { query = ""; scope.launch { loading = true; runCatching { stations = MediaCatalog.searchRadioStations(""); message = "Emisoras populares de España." }.onFailure { message = it.message ?: "Error de radio." }; loading = false } }) { Text("España") }
+            OutlinedButton(onClick = {
+                liveQuery = ""
+                scope.launch {
+                    loading = true
+                    try {
+                        liveStations = MediaCatalog.searchRadioStations("")
+                        message = "Emisoras populares de España."
+                    } catch (e: Exception) { message = e.message ?: "Error de radio." }
+                    loading = false
+                }
+            }) { Text("España") }
         }
-        if (loading) CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
-        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
-        stations.forEach { AudioRow(it, activity, accent, showDownload = false) }
-        Text("Directorio de emisoras: Radio Browser. Algunas URLs pueden dejar de funcionar o requerir restricciones regionales.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        liveStations.forEach { AudioRow(it, activity, accent, showDownload = false) }
+        Text("La radio musical usa pistas con streaming autorizado del catálogo Jamendo; las emisoras en directo dependen de sus propias señales.", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
