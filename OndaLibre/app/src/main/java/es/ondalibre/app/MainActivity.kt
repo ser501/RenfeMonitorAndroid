@@ -170,6 +170,14 @@ class MainActivity : ComponentActivity() {
         if (player.isPlaying) player.pause() else player.play()
     }
 
+    fun skipNext() {
+        mediaController?.seekToNextMediaItem()
+    }
+
+    fun skipPrevious() {
+        mediaController?.seekToPreviousMediaItem()
+    }
+
     fun saveJamendoId(value: String) {
         getSharedPreferences("onda_settings", Context.MODE_PRIVATE).edit().putString("jamendo_client_id", value.trim()).apply()
         toast("Client ID guardado en este dispositivo.")
@@ -558,7 +566,12 @@ private fun RadioScreen(activity: MainActivity, accent: Color) {
 
         if (stations.isNotEmpty()) {
             Text("EN TU RADIO", fontSize = 12.sp, color = accent, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-            stations.forEach { AudioRow(it, activity, accent, showDownload = it.canDownload) }
+            stations.forEachIndexed { index, item ->
+                AudioRow(item, activity, accent, showDownload = item.canDownload, onPlay = {
+                    if (activity.currentAudio?.url == item.url) activity.togglePlayback()
+                    else activity.playQueue(stations, index, repeatAll = true)
+                })
+            }
         }
 
         Divider(color = MaterialTheme.colorScheme.surfaceVariant)
@@ -633,7 +646,7 @@ private fun PodcastShowRow(item: AudioItem, accent: Color, onClick: () -> Unit) 
 }
 
 @Composable
-private fun AudioRow(item: AudioItem, activity: MainActivity, accent: Color, showDownload: Boolean) {
+private fun AudioRow(item: AudioItem, activity: MainActivity, accent: Color, showDownload: Boolean, onPlay: (() -> Unit)? = null) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
@@ -643,7 +656,7 @@ private fun AudioRow(item: AudioItem, activity: MainActivity, accent: Color, sho
                     Text(item.subtitle.ifBlank { item.source }, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     if (item.source.isNotBlank()) Text(item.source, color = accent, fontSize = 10.sp)
                 }
-                FilledTonalButton(onClick = { if (activity.currentAudio?.url == item.url) activity.togglePlayback() else activity.playAudio(item) }, shape = CircleShape, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 10.dp)) {
+                FilledTonalButton(onClick = { onPlay?.invoke() ?: if (activity.currentAudio?.url == item.url) activity.togglePlayback() else activity.playAudio(item) }, shape = CircleShape, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 10.dp)) {
                     Text(if (activity.currentAudio?.url == item.url && activity.isPlaying) "Ⅱ" else "▶", fontSize = 15.sp)
                 }
             }
@@ -680,6 +693,7 @@ private fun MiniPlayer(item: AudioItem, activity: MainActivity, accent: Color) {
             Text(item.title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(item.subtitle.ifBlank { item.source }, fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(if (activity.isPlaying) "Ⅱ" else "▶", color = accent, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+        Text(if (activity.isPlaying) "Ⅱ" else "▶", color = accent, fontSize = 19.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { activity.togglePlayback() })
+        Text("»", color = accent, fontSize = 23.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable { activity.skipNext() })
     }
 }
