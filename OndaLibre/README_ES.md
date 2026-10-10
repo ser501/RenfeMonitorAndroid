@@ -1,24 +1,23 @@
 # OndaLibre — proyecto Android
 
-Aplicación Android nativa (Kotlin + Jetpack Compose) para descubrir y reproducir audio de fuentes públicas y legales. Incluye reproductor en segundo plano mediante Media3, búsqueda de música independiente por Jamendo, búsqueda de pódcast y lectura de feeds RSS, radio en directo mediante Radio Browser, descargas de episodios/temas cuando el proveedor expone un enlace descargable y acceso externo a Spotify.
+Aplicación Android nativa (Kotlin + Jetpack Compose) para descubrir y reproducir audio de fuentes públicas y legales. Incluye reproductor en segundo plano mediante Media3, búsqueda de música independiente por Jamendo, búsqueda de pódcast y lectura de feeds RSS, radio musical por estilos con cola continua, radio en directo mediante Radio Browser y descargas autorizadas de episodios/temas.
 
 ## Funciones implementadas
 
-- **Música libre:** búsqueda en la API oficial de Jamendo. Requiere un Client ID gratuito propio, que se guarda localmente en el dispositivo. Jamendo solo muestra un botón de descarga cuando la API indica que la descarga está permitida.
+- **Música integrada:** búsqueda en la API oficial de Jamendo y reproducción con ExoPlayer dentro de OndaLibre, sin abrir otro reproductor. Requiere un Client ID gratuito propio, que se guarda localmente en el dispositivo. Jamendo solo muestra un botón de descarga cuando la API indica que la descarga está permitida.
+- **Radio musical personalizada:** elige Rock, Metal, Pop, Electrónica, Hip hop, Chill, Lo-fi o Jazz; OndaLibre crea una cola aleatoria y la reproduce en bucle. También puedes crear una radio a partir de un artista o tema. La selección depende del catálogo autorizado de Jamendo.
 - **Pódcast:** búsqueda en el catálogo público de iTunes/Apple Podcasts y lectura de episodios desde su RSS. Los episodios con URL de audio pueden reproducirse y descargarse para uso personal si las condiciones del proveedor lo permiten.
 - **Radio:** búsqueda de emisoras y reproducción de streams directos mediante Radio Browser. La disponibilidad y estabilidad de cada stream dependen de la emisora.
 - **Reproductor:** Media3/ExoPlayer, reproducción en segundo plano, notificación de medios y mini reproductor en la app.
 - **Biblioteca:** listado de archivos descargados en el almacenamiento específico de la app.
 - **Personalización:** tema oscuro con dos colores de acento.
-- **Spotify:** botón que abre la aplicación oficial de Spotify o su web, con búsqueda opcional. No extrae audio, no bloquea anuncios y no imita una suscripción Premium.
+- **Sin redirecciones a Spotify/YouTube:** la app no abre esos servicios para reproducir música. El catálogo integrado usa fuentes que permiten el streaming autorizado.
 
-## Importante sobre Spotify
+## Sobre Spotify y YouTube
 
-La plataforma Spotify establece que el streaming de música mediante sus herramientas solo está disponible para usuarios Premium y que las aplicaciones deben respetar sus políticas. Por eso, OndaLibre **no** obtiene ni descarga canciones de Spotify ni mezcla su flujo de audio con los reproductores externos. La entrada de Spotify abre el servicio oficial fuera de OndaLibre. Para reproducción completa sin anuncios de Spotify, se aplican los requisitos de cuenta y suscripción de Spotify.
+OndaLibre no extrae ni copia canciones protegidas de Spotify o YouTube ni evita sus sistemas de acceso. Sus catálogos no se pueden convertir en una fuente de audio libre para otra app sin autorización. Por eso, la reproducción integrada usa el catálogo de Jamendo y streams de emisoras, que se escuchan directamente en OndaLibre. Para incorporar canciones comerciales concretas sería necesario disponer de archivos con licencia o de un proveedor que autorice su reproducción dentro de esta aplicación.
 
-Documentación oficial:
-- Spotify Android SDK: https://developer.spotify.com/documentation/android
-- Política de Spotify: https://developer.spotify.com/policy
+Documentación:
 - API de Jamendo: https://developer.jamendo.com/v3.0/docs
 - Radio Browser: https://www.radio-browser.info/
 - Apple Search API: https://itunes.apple.com/search
@@ -38,7 +37,7 @@ Alternativa desde terminal, si ya tienes Gradle 8.9 instalado en el PATH:
 gradle assembleDebug
 ```
 
-Este paquete contiene el **código fuente del proyecto**, no un APK precompilado. En el entorno en el que se preparó no están instalados Android SDK ni Gradle y no ha sido posible compilar o probar el APK aquí.
+El APK de depuración se genera con GitHub Actions. La compilación automática comprueba que el código compila, pero no sustituye una prueba de reproducción en un dispositivo real.
 
 ## Configurar Jamendo
 
