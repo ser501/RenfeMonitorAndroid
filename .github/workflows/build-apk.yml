@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -30,3 +33,17 @@ jobs:
         with:
           name: OndaLibre-apk
           path: OndaLibre.apk
+
+      - name: Publicar APK (release y rama onda-libre-apk)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="onda-libre-${{ github.run_number }}"
+          gh release create "$TAG" OndaLibre.apk --target "${{ github.sha }}" \
+            --title "Onda Libre (compilación ${{ github.run_number }})" \
+            --notes "APK de Onda Libre lista para instalar." --latest=false
+          mkdir out && cp OndaLibre.apk out/ && cd out
+          git init -q -b onda-libre-apk
+          git -c user.name=github-actions -c user.email=actions@github.com add OndaLibre.apk
+          git -c user.name=github-actions -c user.email=actions@github.com commit -qm "APK ${{ github.run_number }}"
+          git push -f "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" onda-libre-apk
